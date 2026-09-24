@@ -123,7 +123,7 @@ export function CatalogView({ catalog, status, error, onRetry, summary }: Catalo
             >
               <IconWhatsApp size={18} className="text-[#25D366]" /> ¿Dudas? Escríbenos
             </a>
-            <p className="mt-6">© {new Date().getFullYear()} Mariana Nails</p>
+            <p className="mt-6">© {new Date().getFullYear()} ByMariaNails</p>
           </footer>
         </motion.div>
       )}

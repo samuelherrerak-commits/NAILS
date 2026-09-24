@@ -30,7 +30,7 @@ const PROMOCIONES = [
 ]
 
 const CONFIG = {
-  nombre_negocio: 'Mariana',
+  nombre_negocio: 'ByMariaNails',
   whatsapp: DEFAULT_WHATSAPP,
   hora_apertura: '09:00',
   hora_cierre: '19:00',
@@ -42,11 +42,15 @@ const CONFIG = {
   pm_banco: 'Banesco (0134)',
   pm_telefono: '0412-2516390',
   pm_cedula: 'V-12.345.678',
+  recargo_domicilio_pct: '20',
+  minutos_extra_domicilio: '15',
+  direccion_spa: '',
+  direccion_spa_url: 'https://maps.app.goo.gl/MBfSuyGHQrRRcDp17',
 }
 
 const CUPONES: Record<string, Coupon> = {
   BIENVENIDA: { codigo: 'BIENVENIDA', porcentaje: 10, monto: 0 },
-  MARIANA5: { codigo: 'MARIANA5', porcentaje: 0, monto: 5 },
+  MARIA5: { codigo: 'MARIA5', porcentaje: 0, monto: 5 },
 }
 
 /** Citas ocupadas relativas a hoy (hora de Caracas, UTC−4). */
@@ -88,6 +92,15 @@ export async function mockValidateCoupon(codigo: string): Promise<Coupon> {
 
 export async function mockSubmitReservation(payload: ReservationPayload): Promise<ReservationResult> {
   await wait(900)
-  console.info('[demo] Reservación que se enviaría al Apps Script:', payload)
-  return { id: crypto.randomUUID(), total: payload.total, totalBs: null, tasa: null }
+  console.info('[demo] Reservación que se enviaría al Apps Script:', {
+    ...payload,
+    comprobante: payload.comprobante ? `${payload.comprobante.nombre} (${payload.comprobante.base64.length} caracteres)` : null,
+  })
+  return {
+    id: crypto.randomUUID(),
+    total: payload.total,
+    totalBs: null,
+    tasa: null,
+    comprobanteUrl: payload.comprobante ? 'https://drive.google.com/file/d/demo/view' : null,
+  }
 }

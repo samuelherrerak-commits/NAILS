@@ -26,8 +26,8 @@ export default function App() {
   const catalogScroll = useRef(0)
 
   const summary = useMemo(
-    () => summarize(state.cart, catalog ?? EMPTY_CATALOG, state.coupon),
-    [state.cart, state.coupon, catalog],
+    () => summarize(state.cart, catalog ?? EMPTY_CATALOG, state.coupon, state.modalidad, catalog?.config.domicilio),
+    [state.cart, state.coupon, state.modalidad, catalog],
   )
 
   const show = useCallback((next: View) => {
@@ -62,9 +62,9 @@ export default function App() {
   // Protecciones: no se llega a agenda/pago sin catálogo, servicio base o cupo.
   useEffect(() => {
     if (view === 'catalogo' || view === 'listo') return
-    if (status !== 'ready' || !summary.hasBase) show('catalogo')
+    if (status !== 'ready' || !summary.hasBase || !state.modalidad) show('catalogo')
     else if (view === 'pago' && !state.schedule) show('agenda')
-  }, [view, status, summary.hasBase, state.schedule, show])
+  }, [view, status, summary.hasBase, state.modalidad, state.schedule, show])
 
   const startBooking = () => {
     setCartOpen(false)
@@ -120,7 +120,7 @@ export default function App() {
       </AnimatePresence>
 
       <CartBar count={view === 'catalogo' ? summary.count : 0} total={summary.total} onOpen={() => setCartOpen(true)} />
-      <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} summary={summary} onContinue={startBooking} />
+      <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} summary={summary} onContinue={startBooking} config={catalog?.config ?? null} />
     </div>
   )
 }

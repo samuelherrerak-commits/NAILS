@@ -39,6 +39,32 @@ describe('summarize', () => {
   })
 })
 
+describe('a domicilio', () => {
+  const cart = { servicios: ['S1'], promos: [] }
+  const c20 = { ...catalog, servicios: [{ ...servicios[0], precio: 20 }] }
+
+  it('suma 20 % sobre el subtotal antes del cupón y 15 min a la duración', () => {
+    // 20 € + 4 € (20 %) − 2 € (cupón de 2 €) = 22 €
+    const s = summarize(cart, c20, { codigo: 'M', porcentaje: 0, monto: 2 }, 'domicilio', { recargoPct: 20, minutosExtra: 15 })
+    expect(s.recargo).toBe(4)
+    expect(s.descuento).toBe(2)
+    expect(s.total).toBe(22)
+    expect(s.duracionMin).toBe(75)
+  })
+
+  it('el cupón por porcentaje se calcula sobre el subtotal de los servicios', () => {
+    const s = summarize(cart, c20, { codigo: 'P', porcentaje: 10, monto: 0 }, 'domicilio')
+    expect(s.total).toBe(22) // 20 + 4 − 2
+  })
+
+  it('en el spa no hay recargo ni minutos extra', () => {
+    const s = summarize(cart, c20, null, 'spa')
+    expect(s.recargo).toBe(0)
+    expect(s.total).toBe(20)
+    expect(s.duracionMin).toBe(60)
+  })
+})
+
 describe('couponDiscount', () => {
   it('nunca supera el subtotal', () => {
     expect(couponDiscount(4, { codigo: 'M', porcentaje: 0, monto: 10 })).toBe(4)

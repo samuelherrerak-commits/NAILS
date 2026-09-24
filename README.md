@@ -1,6 +1,6 @@
-# Mariana Nails · Reservas
+# ByMariaNails · Reservas
 
-Landing page **estática y mobile-first** para reservar citas de uñas. La clienta elige servicios, promociones y adicionales, aplica un cupón, escoge fecha y hora libres y asigna **obligatoriamente** su método de pago (en el lugar o Pago Móvil con referencia). Al confirmar, la reserva se guarda en Google Sheets y Google Calendar, y la clienta pasa a WhatsApp con el resumen.
+Landing page **estática y mobile-first** para reservar citas de uñas con ByMariaNails. La clienta elige servicios, promociones y adicionales, indica si la cita es **en el spa o a domicilio** (+20 % y 15 min de traslado), aplica un cupón, escoge fecha y hora libres y asigna **obligatoriamente** su método de pago: pago en la cita, o Pago Móvil con **"Copiar todo"**, **"Ya pagué"** y el **capture** del pago. Al confirmar, la reserva se guarda en Google Sheets, Google Calendar y Drive (el capture), y la clienta pasa a WhatsApp con un mensaje ya armado.
 
 - **Front:** Vite + React + TypeScript + Tailwind CSS v4 + Framer Motion + Sonner.
 - **Backend:** Google Apps Script (`apps-script/Code.gs`) sobre Google Sheets y Google Calendar.
@@ -30,7 +30,7 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 1. Crea una hoja de cálculo en Google Sheets y abre **Extensiones → Apps Script**.
 2. Pega el contenido de `apps-script/Code.gs`.
 3. En **Configuración del proyecto (⚙️)**, cambia la **zona horaria** a `America/Caracas`.
-4. Ejecuta **`setupDatabase`** y acepta los permisos. Crea las hojas (incluidas **Horarios** y **Bloqueos**), los encabezados, las claves de configuración y el calendario "Citas Mariana". Si ya tenías hojas, no borra nada: solo agrega lo que falte.
+4. Ejecuta **`setupDatabase`** y acepta los permisos (Hojas, Calendar y **Drive**, para guardar los captures en la carpeta "Comprobantes ByMariaNails"). Crea las hojas (incluidas **Horarios** y **Bloqueos**), los encabezados, las claves de configuración y el calendario "Citas Mariana". Si ya tenías hojas, no borra nada: solo agrega lo que falte.
 5. (Opcional) Ejecuta **`seedDemoData`** para cargar servicios, promociones y el cupón `BIENVENIDA` de ejemplo.
 6. Completa la hoja **Configuracion** (tabla más abajo), sobre todo los datos de Pago Móvil.
 7. Ejecuta **`diagnostico`** para ver los servicios, promociones y horarios que va a recibir la página, y **`probarTasa`** para confirmar que se obtiene la tasa BCV del euro.
@@ -46,7 +46,7 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 | `Horarios` | `Dia, Hora_Inicio, Hora_Fin` | Tu horario semanal. Una fila por tramo; puedes repetir el día para una pausa (Lunes 09:00–12:00 y Lunes 14:00–18:00). Deja las horas vacías para cerrar ese día. |
 | `Bloqueos` | `Fecha, Hora_Inicio, Hora_Fin, Motivo` | Cierra fechas u horas puntuales (vacaciones, citas por fuera). Sin horas, bloquea el día completo. El motivo no se muestra a las clientas. |
 | `Cupones` | `Codigo, Descuento_Porcentaje, Descuento_Monto, Usos_Restantes` | Se usa el porcentaje si es mayor que 0; si no, el monto en €. Si `Usos_Restantes` está vacío, el cupón es ilimitado. |
-| `Reservaciones` | `ID, Fecha_Solicitud, Cliente, Telefono, Servicios, Total, Fecha_Cita, Hora_Cita, Metodo_Pago, Referencia, Cupon, Estado, Tasa_BCV, Total_Bs` | La llena el script. Las reservas con Pago Móvil entran con estado `Pago por verificar`. |
+| `Reservaciones` | `ID, Fecha_Solicitud, Cliente, Telefono, Servicios, Total, Fecha_Cita, Hora_Cita, Metodo_Pago, Referencia, Cupon, Estado, Tasa_BCV, Total_Bs, Modalidad, Direccion, Recargo, Comprobante` | La llena el script. Las reservas con Pago Móvil entran con estado `Pago por verificar` y con el enlace al capture en Drive. `Referencia` ya no se usa (queda "N/A"). |
 | `Configuracion` | `Clave, Valor` | Ver la tabla siguiente. |
 
 ### Claves de `Configuracion`
@@ -61,6 +61,12 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 | `anticipacion_min_horas` | `2` | Horas mínimas de aviso para reservar hoy. |
 | `pm_banco`, `pm_telefono`, `pm_cedula` | `Banesco (0134)`, `0412-2516390`, `V-12.345.678` | Datos de Pago Móvil que ve la clienta. |
 | `tasa_eur_manual` | `412,35` | Solo se usa si no se puede obtener la tasa BCV. |
+| `recargo_domicilio_pct` | `20` | % que se suma a domicilio, sobre el precio de los servicios (antes del cupón). |
+| `minutos_extra_domicilio` | `15` | Minutos de traslado que se reservan en la agenda para citas a domicilio. |
+| `direccion_spa` | `Urb. …, local 3` | Opcional: texto de la dirección del spa. |
+| `direccion_spa_url` | `https://maps.app.goo.gl/MBfSuyGHQrRRcDp17` | Enlace de Google Maps del spa (en la página y en el mensaje). |
+
+**Calendario:** se sigue llamando "Citas Mariana" a propósito. Si se renombrara, el script crearía un calendario nuevo y vacío y dejaría de ver las citas ya guardadas.
 
 **Bloquear días u horas:** agrega una fila en la pestaña **Bloqueos**, o crea un evento en el calendario "Citas Mariana" (un evento de todo el día bloquea el día completo).
 

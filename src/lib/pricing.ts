@@ -1,4 +1,4 @@
-import type { Cart, Catalog, Coupon, Promo, Service, Tasa } from '../types'
+import type { BusinessConfig, Cart, Catalog, Coupon, Modalidad, Promo, Service, Tasa } from '../types'
 
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
@@ -18,6 +18,9 @@ export interface OrderLine {
 export interface OrderSummary {
   lines: OrderLine[]
   subtotal: number
+  /** Recargo por ir a domicilio (sobre el subtotal, antes del cupón). */
+  recargo: number
+  recargoPct: number
   descuento: number
   total: number
   totalBs: number | null
@@ -91,18 +94,25 @@ export function summarize(
   cart: Cart,
   catalog: Pick<Catalog, 'servicios' | 'promociones' | 'tasa'>,
   coupon: Coupon | null,
+  modalidad: Modalidad | null = null,
+  domicilio: BusinessConfig['domicilio'] = { recargoPct: 20, minutosExtra: 15 },
 ): OrderSummary {
   const lines = buildLines(cart, catalog)
   const subtotal = round2(lines.reduce((sum, l) => sum + l.precio, 0))
+  const aDomicilio = modalidad === 'domicilio' && lines.length > 0
+  // Recargo sobre el precio completo de los servicios; el cupón se descuenta después.
+  const recargo = aDomicilio ? round2((subtotal * domicilio.recargoPct) / 100) : 0
   const descuento = couponDiscount(subtotal, coupon)
-  const total = round2(subtotal - descuento)
+  const total = round2(subtotal + recargo - descuento)
   return {
     lines,
     subtotal,
+    recargo,
+    recargoPct: domicilio.recargoPct,
     descuento,
     total,
     totalBs: toBs(total, catalog.tasa),
-    duracionMin: lines.reduce((sum, l) => sum + l.duracionMin, 0),
+    duracionMin: lines.reduce((sum, l) => sum + l.duracionMin, 0) + (aDomicilio ? domicilio.minutosExtra : 0),
     hasBase: lines.some((l) => l.tipo !== 'adicional'),
     count: lines.length,
   }

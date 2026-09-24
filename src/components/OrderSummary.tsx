@@ -14,6 +14,21 @@ export function OrderSummary({ summary, showBs = false }: { summary: Summary; sh
         <AnimatedNumber value={summary.subtotal} format={fmt} />
       </Row>
       <AnimatePresence initial={false}>
+        {summary.recargo > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={spring.gentle}
+            className="overflow-hidden"
+          >
+            <Row label={`A domicilio (+${summary.recargoPct} %)`}>
+              +<AnimatedNumber value={summary.recargo} format={fmt} />
+            </Row>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence initial={false}>
         {summary.descuento > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}

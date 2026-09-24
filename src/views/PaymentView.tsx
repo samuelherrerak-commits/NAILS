@@ -7,11 +7,12 @@ import { StepHeader } from '../components/checkout/StepHeader'
 import { OrderSummary } from '../components/OrderSummary'
 import { BottomBar } from '../components/ui/BottomBar'
 import { Button } from '../components/ui/Button'
-import { IconCalendar, IconWhatsApp } from '../components/ui/icons'
-import { METODO_LABEL } from '../config'
+import { IconCalendar, IconHome, IconMapPin, IconWhatsApp } from '../components/ui/icons'
+import { METODO_LABEL, MODALIDAD_LABEL } from '../config'
 import { ApiError, submitReservation } from '../lib/api'
 import { capitalize, formatEUR, formatLongDate, formatTime12 } from '../lib/format'
 import { servicesText, type OrderSummary as Summary } from '../lib/pricing'
+import { splitDataUrl } from '../lib/image'
 import { buildWhatsAppMessage, buildWhatsAppUrl } from '../lib/whatsapp'
 import { useOrder } from '../state/order'
 import type { Catalog, ReservationPayload } from '../types'
@@ -25,8 +26,6 @@ interface PaymentViewProps {
   onSuccess: (whatsappUrl: string) => void
 }
 
-const REFERENCIA_RE = /^\d{4,20}$/
-
 export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }: PaymentViewProps) {
   const { state, dispatch } = useOrder()
   const [attempted, setAttempted] = useState(false)
@@ -34,27 +33,30 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
   const selectorRef = useRef<PaymentSelectorHandle>(null)
   const nombreRef = useRef<HTMLInputElement>(null)
   const telefonoRef = useRef<HTMLInputElement>(null)
-  const referenciaRef = useRef<HTMLInputElement>(null)
+  const direccionRef = useRef<HTMLInputElement>(null)
+  const comprobanteRef = useRef<HTMLDivElement>(null)
 
-  const { customer, payment, schedule, coupon } = state
-  const customerErrors = validateCustomer(customer)
+  const { customer, payment, schedule, coupon, modalidad } = state
+  const customerErrors = validateCustomer(customer, modalidad)
   const paymentError = attempted && !payment ? 'Elige cómo vas a pagar para continuar.' : null
-  const referenciaError =
-    attempted && payment?.metodo === 'pago_movil' && !REFERENCIA_RE.test(payment.referencia)
-      ? 'Escribe al menos 4 dígitos de la referencia.'
+  const comprobanteError =
+    attempted && payment?.metodo === 'pago_movil' && !payment.comprobante
+      ? payment.pagado
+        ? 'Sube el capture de tu pago para continuar.'
+        : 'Haz el Pago Móvil, toca "Ya pagué" y sube el capture.'
       : null
 
   const confirm = async () => {
     if (submitting) return
     setAttempted(true)
 
-    if (!schedule) return onBack()
+    if (!schedule || !modalidad) return onBack()
     if (customerErrors.nombre) return nombreRef.current?.focus()
     if (customerErrors.telefono) return telefonoRef.current?.focus()
+    if (customerErrors.direccion) return direccionRef.current?.focus()
     if (!payment) return selectorRef.current?.flag()
-    if (payment.metodo === 'pago_movil' && !REFERENCIA_RE.test(payment.referencia)) {
-      referenciaRef.current?.focus()
-      referenciaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (payment.metodo === 'pago_movil' && !payment.comprobante) {
+      comprobanteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
@@ -68,8 +70,13 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
       horaCita: schedule.hora,
       duracionTotalMin: summary.duracionMin,
       metodoPago: METODO_LABEL[payment.metodo],
-      referencia: payment.metodo === 'pago_movil' ? payment.referencia : '',
       cupon: coupon?.codigo ?? '',
+      modalidad,
+      direccion: modalidad === 'domicilio' ? customer.direccion.trim() : '',
+      comprobante:
+        payment.metodo === 'pago_movil' && payment.comprobante
+          ? { ...splitDataUrl(payment.comprobante.dataUrl), nombre: payment.comprobante.nombre }
+          : null,
     }
 
     setSubmitting(true)
@@ -89,8 +96,11 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
         summary: finalSummary,
         coupon,
         payment,
+        modalidad,
+        spa: catalog.config.spa,
         tasa,
         reservaId: result.id,
+        comprobanteUrl: result.comprobanteUrl,
       })
       onSuccess(buildWhatsAppUrl(catalog.config.whatsapp, message))
     } catch (err) {
@@ -135,6 +145,30 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
               </button>
             </div>
           )}
+          {modalidad && (
+            <div className="mt-3 flex items-center gap-3">
+              <span className="grid size-11 place-items-center rounded-xl bg-rose-soft text-rose-deep">
+                {modalidad === 'domicilio' ? <IconHome size={20} /> : <IconMapPin size={20} />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-medium">{MODALIDAD_LABEL[modalidad]}</p>
+                {modalidad === 'spa' ? (
+                  <a
+                    href={catalog.config.spa.mapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block truncate text-[13px] font-medium text-rose-deep underline-offset-2 hover:underline"
+                  >
+                    {catalog.config.spa.direccion || 'Ver ubicación en Google Maps'}
+                  </a>
+                ) : (
+                  <p className="text-[13px] text-muted">
+                    +{summary.recargoPct} % por traslado · te pedimos la dirección abajo
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           <ul className="mt-4 space-y-1.5 border-t border-line pt-4 text-[14px]">
             {summary.lines.map((l) => (
               <li key={l.key} className="flex justify-between gap-3">
@@ -159,6 +193,8 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
             showErrors={attempted}
             nombreRef={nombreRef}
             telefonoRef={telefonoRef}
+            direccionRef={direccionRef}
+            modalidad={modalidad}
           />
         </section>
 
@@ -177,13 +213,15 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
             pagoMovilPanel={
               payment?.metodo === 'pago_movil' && (
                 <PagoMovilDetails
-                  ref={referenciaRef}
+                  ref={comprobanteRef}
                   data={catalog.config.pagoMovil}
                   totalBs={summary.totalBs}
                   tasa={catalog.tasa}
-                  referencia={payment.referencia}
-                  onReferencia={(referencia) => dispatch({ type: 'setReferencia', referencia })}
-                  error={referenciaError}
+                  pagado={payment.pagado}
+                  comprobante={payment.comprobante}
+                  onPagado={() => dispatch({ type: 'setPagado', pagado: true })}
+                  onComprobante={(comprobante) => dispatch({ type: 'setComprobante', comprobante })}
+                  error={comprobanteError}
                 />
               )
             }

@@ -147,8 +147,10 @@ export function normalizeHorarios(rows: unknown): Array<Array<[number, number]>>
   return any ? week : null
 }
 
+export const DEFAULT_SPA_MAPS = 'https://maps.app.goo.gl/MBfSuyGHQrRRcDp17'
+
 export const DEFAULT_CONFIG: BusinessConfig = {
-  nombreNegocio: 'Mariana',
+  nombreNegocio: 'ByMariaNails',
   whatsapp: DEFAULT_WHATSAPP,
   horario: [[], [[540, 1140]], [[540, 1140]], [[540, 1140]], [[540, 1140]], [[540, 1140]], [[540, 1140]]],
   intervaloMin: 30,
@@ -156,6 +158,8 @@ export const DEFAULT_CONFIG: BusinessConfig = {
   anticipacionMinHoras: 2,
   zonaHoraria: 'America/Caracas',
   pagoMovil: { banco: '', telefono: '', cedula: '' },
+  domicilio: { recargoPct: 20, minutosExtra: 15 },
+  spa: { direccion: '', mapsUrl: DEFAULT_SPA_MAPS },
 }
 
 export function normalizeConfig(raw: unknown, horariosRaw?: unknown): BusinessConfig {
@@ -201,6 +205,14 @@ export function normalizeConfig(raw: unknown, horariosRaw?: unknown): BusinessCo
       banco: map.pm_banco ?? '',
       telefono: map.pm_telefono ?? '',
       cedula: map.pm_cedula ?? '',
+    },
+    domicilio: {
+      recargoPct: map.recargo_domicilio_pct ? toNumber(map.recargo_domicilio_pct, d.domicilio.recargoPct) : d.domicilio.recargoPct,
+      minutosExtra: int('minutos_extra_domicilio', d.domicilio.minutosExtra),
+    },
+    spa: {
+      direccion: map.direccion_spa ?? '',
+      mapsUrl: /^https?:\/\//.test(map.direccion_spa_url ?? '') ? map.direccion_spa_url : d.spa.mapsUrl,
     },
   }
 }

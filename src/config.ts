@@ -8,6 +8,13 @@ export const DEFAULT_WHATSAPP: string = ((env.VITE_WHATSAPP ?? '').trim() || '58
 export const DEMO_MODE = API_URL === ''
 
 export const METODO_LABEL = {
-  lugar: 'Pago en el lugar',
+  lugar: 'Pago en la cita',
   pago_movil: 'Bolívares (Pago Móvil)',
+} as const
+
+export const BRAND = 'ByMariaNails'
+
+export const MODALIDAD_LABEL = {
+  spa: 'En el spa',
+  domicilio: 'A domicilio',
 } as const

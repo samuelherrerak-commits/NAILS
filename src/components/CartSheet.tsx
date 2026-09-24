@@ -3,7 +3,10 @@ import { formatDuration, formatEUR } from '../lib/format'
 import { spring } from '../lib/motion'
 import type { OrderLine, OrderSummary as Summary } from '../lib/pricing'
 import { useOrder } from '../state/order'
+import { DEFAULT_CONFIG } from '../lib/normalize'
+import type { BusinessConfig } from '../types'
 import { CouponInput } from './CouponInput'
+import { ModalidadSelector } from './ModalidadSelector'
 import { OrderSummary } from './OrderSummary'
 import { BottomSheet } from './ui/BottomSheet'
 import { Button } from './ui/Button'
@@ -14,10 +17,18 @@ interface CartSheetProps {
   onClose: () => void
   summary: Summary
   onContinue: () => void
+  config: BusinessConfig | null
 }
 
-export function CartSheet({ open, onClose, summary, onContinue }: CartSheetProps) {
+export function CartSheet({ open, onClose, summary, onContinue, config }: CartSheetProps) {
   const { state, dispatch } = useOrder()
+  const hint = !summary.count
+    ? null
+    : !summary.hasBase
+      ? 'Los adicionales se suman a un servicio base. Agrega uno para continuar.'
+      : !state.modalidad
+        ? 'Elige si tu cita será en el spa o a domicilio.'
+        : null
 
   const remove = (line: OrderLine) =>
     dispatch(line.kind === 'promo' ? { type: 'togglePromo', id: line.id } : { type: 'toggleService', id: line.id })
@@ -30,18 +41,19 @@ export function CartSheet({ open, onClose, summary, onContinue }: CartSheetProps
       footer={
         <div className="pb-1">
           <AnimatePresence initial={false}>
-            {summary.count > 0 && !summary.hasBase && (
+            {hint && (
               <motion.p
+                key={hint}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden pb-2 text-center text-[13px] text-rose-deep"
               >
-                Los adicionales se suman a un servicio base. Agrega uno para continuar.
+                {hint}
               </motion.p>
             )}
           </AnimatePresence>
-          <Button block onClick={onContinue} disabled={!summary.hasBase}>
+          <Button block onClick={onContinue} disabled={!summary.hasBase || !state.modalidad}>
             Elegir fecha y hora <IconArrowRight size={18} />
           </Button>
         </div>
@@ -100,6 +112,12 @@ export function CartSheet({ open, onClose, summary, onContinue }: CartSheetProps
               ))}
             </AnimatePresence>
           </ul>
+
+          <ModalidadSelector
+            value={state.modalidad}
+            onChange={(modalidad) => dispatch({ type: 'setModalidad', modalidad })}
+            config={config ?? DEFAULT_CONFIG}
+          />
 
           <CouponInput
             coupon={state.coupon}

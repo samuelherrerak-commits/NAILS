@@ -1,11 +1,12 @@
 /**
- * Backend de reservas de Mariana Nails (Google Apps Script + Sheets + Calendar).
+ * Backend de reservas de ByMariaNails (Google Apps Script + Sheets + Calendar).
  *
  * Instalación:
  *   1. Abre la hoja de cálculo > Extensiones > Apps Script y pega este archivo.
  *   2. Configuración del proyecto (⚙️) > Zona horaria: America/Caracas
  *      (o copia apps-script/appsscript.json en el editor).
- *   3. Ejecuta `setupDatabase` una vez (pide permisos). Opcional: `seedDemoData`.
+ *   3. Ejecuta `setupDatabase` (pide permisos de Hojas, Calendar y Drive). Opcional: `seedDemoData`.
+ *      Los captures de Pago Móvil se guardan en la carpeta de Drive "Comprobantes ByMariaNails".
  *   4. Llena "Configuracion" (datos de Pago Móvil) y "Horarios" (tu horario semanal).
  *      En "Bloqueos" cierras fechas u horas puntuales (vacaciones, citas por fuera).
  *      Ejecuta `diagnostico` para ver qué está leyendo el sistema.
@@ -20,13 +21,18 @@
 const TOKEN = 'MARIANAILS';
 const CALENDAR_NAME = 'Citas Mariana';
 const ZONA = 'America/Caracas';
-const METODOS_PAGO = ['Pago en el lugar', 'Bolívares (Pago Móvil)'];
+const PAGO_MOVIL = 'Bolívares (Pago Móvil)';
+// "Pago en el lugar" se sigue aceptando por compatibilidad con la versión anterior.
+const METODOS_PAGO = ['Pago en la cita', 'Pago en el lugar', PAGO_MOVIL];
+const CARPETA_COMPROBANTES = 'Comprobantes ByMariaNails';
+const MAX_COMPROBANTE_BYTES = 6 * 1024 * 1024;
 
 const SHEETS = [
   {
     name: 'Reservaciones',
     headers: ['ID', 'Fecha_Solicitud', 'Cliente', 'Telefono', 'Servicios', 'Total', 'Fecha_Cita', 'Hora_Cita',
-      'Metodo_Pago', 'Referencia', 'Cupon', 'Estado', 'Tasa_BCV', 'Total_Bs'],
+      'Metodo_Pago', 'Referencia', 'Cupon', 'Estado', 'Tasa_BCV', 'Total_Bs',
+      'Modalidad', 'Direccion', 'Recargo', 'Comprobante'],
   },
   { name: 'Servicios', headers: ['ID', 'Nombre', 'Precio', 'Duracion_Min', 'Tipo'] },
   { name: 'Promociones', headers: ['ID', 'Nombre', 'Servicios_Incluidos', 'Precio_Promo'] },
@@ -40,7 +46,7 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 
 // Claves que lee la landing. Los valores vacíos se completan en la hoja.
 const CONFIG_DEFAULTS = [
-  ['nombre_negocio', 'Mariana'],
+  ['nombre_negocio', 'ByMariaNails'],
   ['whatsapp', '584122516390'],
   ['hora_apertura', '09:00'],
   ['hora_cierre', '19:00'],
@@ -53,6 +59,10 @@ const CONFIG_DEFAULTS = [
   ['pm_telefono', ''], // ej. "0412-2516390"
   ['pm_cedula', ''], // ej. "V-12.345.678"
   ['tasa_eur_manual', ''], // solo se usa si la tasa BCV no se puede obtener
+  ['recargo_domicilio_pct', '20'], // % sobre el precio de los servicios (antes del cupón)
+  ['minutos_extra_domicilio', '15'], // tiempo de traslado que se reserva en la agenda
+  ['direccion_spa', ''], // texto opcional, ej. "Urb. …, local 3"
+  ['direccion_spa_url', 'https://maps.app.goo.gl/MBfSuyGHQrRRcDp17'],
 ];
 
 // ============================================================================
@@ -105,6 +115,9 @@ function setupDatabase() {
   ss.getSheetByName('Bloqueos').getRange('B:C').setNumberFormat('@');
 
   getCalendar_();
+
+  // Carpeta de Drive para los captures de Pago Móvil (pide el permiso de Drive).
+  if (!DriveApp.getFoldersByName(CARPETA_COMPROBANTES).hasNext()) DriveApp.createFolder(CARPETA_COMPROBANTES);
 }
 
 /** Opcional: carga servicios, promociones y un cupón de ejemplo si las hojas están vacías. */
@@ -196,8 +209,10 @@ function doPost(e) {
     const fechaCita = String(data.fechaCita || '');
     const horaCita = String(data.horaCita || '');
     const metodoPago = String(data.metodoPago || '');
-    const referencia = String(data.referencia || '').replace(/\D/g, '');
-    const esPagoMovil = metodoPago === METODOS_PAGO[1];
+    const esPagoMovil = metodoPago === PAGO_MOVIL;
+    const modalidad = String(data.modalidad || '');
+    const direccion = String(data.direccion || '').trim();
+    const comprobante = data.comprobante && data.comprobante.base64 ? data.comprobante : null;
 
     if (cliente.length < 2 || telefono.replace(/\D/g, '').length < 10 ||
         !/^\d{4}-\d{2}-\d{2}$/.test(fechaCita) || !/^\d{2}:\d{2}$/.test(horaCita)) {
@@ -207,12 +222,22 @@ function doPost(e) {
     if (METODOS_PAGO.indexOf(metodoPago) === -1) {
       return json_({ error: 'datos_invalidos', mensaje: 'Selecciona un método de pago.' });
     }
-    if (esPagoMovil && !/^\d{4,20}$/.test(referencia)) {
-      return json_({ error: 'datos_invalidos', mensaje: 'Falta el número de referencia del Pago Móvil.' });
+    if (modalidad !== 'spa' && modalidad !== 'domicilio') {
+      return json_({ error: 'datos_invalidos', mensaje: 'Elige si la cita es en el spa o a domicilio.' });
+    }
+    if (modalidad === 'domicilio' && direccion.length < 8) {
+      return json_({ error: 'datos_invalidos', mensaje: 'Falta la dirección para la cita a domicilio.' });
+    }
+    if (esPagoMovil && !comprobante) {
+      return json_({ error: 'datos_invalidos', mensaje: 'Falta el capture del Pago Móvil.' });
+    }
+    if (comprobante && (String(comprobante.base64).length * 3) / 4 > MAX_COMPROBANTE_BYTES) {
+      return json_({ error: 'datos_invalidos', mensaje: 'La imagen del capture es demasiado grande.' });
     }
 
     // --- El total se recalcula aquí; no se confía en el que manda el navegador ---
-    const orden = calcularOrden_(ss, data.items, data.cupon);
+    const config = getConfig_(ss);
+    const orden = calcularOrden_(ss, data.items, data.cupon, modalidad, config);
     if (orden.lineas.length === 0 || !orden.hasBase) {
       return json_({ error: 'datos_invalidos', mensaje: 'Tu orden necesita al menos un servicio base.' });
     }
@@ -230,7 +255,7 @@ function doPost(e) {
     const minInicio = toMinutes_(horaCita);
     const minFin = minInicio + orden.duracion;
     const diaSemana = Number(Utilities.formatDate(inicio, ZONA, 'u')) % 7; // 1 = lunes … 7 = domingo
-    const tramos = getHorarios_(ss, getConfig_(ss)).filter(function (t) { return t.dia === diaSemana; });
+    const tramos = getHorarios_(ss, config).filter(function (t) { return t.dia === diaSemana; });
     const dentro = tramos.some(function (t) {
       return minInicio >= toMinutes_(t.inicio) && minFin <= toMinutes_(t.fin);
     });
@@ -253,9 +278,17 @@ function doPost(e) {
     const tasa = getTasaEuroBCV();
     const totalBs = tasa ? round2_(orden.total * tasa.valor) : null;
 
-    // --- Guardar en la hoja (por nombre de columna) ---
+    // --- Guardar el capture en Drive ---
     const id = Utilities.getUuid();
     const serviciosTexto = orden.lineas.map(function (l) { return l.nombre; }).join(', ');
+    const comprobanteUrl = comprobante
+      ? guardarComprobante_(comprobante, fechaCita + '_' + horaCita.replace(':', '') + '_' + slug_(cliente) + '_' + id.slice(0, 8))
+      : '';
+    const ubicacion = modalidad === 'domicilio'
+      ? direccion
+      : (config.direccion_spa ? config.direccion_spa + ' · ' : '') + (config.direccion_spa_url || '');
+
+    // --- Guardar en la hoja (por nombre de columna) ---
     appendByHeaders_(ss.getSheetByName('Reservaciones'), {
       ID: id,
       Fecha_Solicitud: new Date(),
@@ -266,27 +299,44 @@ function doPost(e) {
       Fecha_Cita: fechaCita,
       Hora_Cita: horaCita,
       Metodo_Pago: metodoPago,
-      Referencia: esPagoMovil ? referencia : 'N/A',
+      Referencia: 'N/A',
       Cupon: orden.cupon ? orden.cupon.codigo : 'N/A',
       Estado: esPagoMovil ? 'Pago por verificar' : 'Confirmada',
       Tasa_BCV: tasa ? tasa.valor : '',
       Total_Bs: totalBs === null ? '' : totalBs,
+      Modalidad: modalidad === 'domicilio' ? 'A domicilio' : 'En el spa',
+      Direccion: modalidad === 'domicilio' ? direccion : 'Spa',
+      Recargo: orden.recargo,
+      Comprobante: comprobanteUrl || 'N/A',
     });
 
     if (orden.cupon) descontarCupon_(ss, orden.cupon);
 
-    calendar.createEvent('Cita: ' + cliente + ' - ' + serviciosTexto, inicio, fin, {
+    const titulo = (modalidad === 'domicilio' ? '🏠 Domicilio · ' : '') + 'Cita: ' + cliente + ' - ' + serviciosTexto;
+    calendar.createEvent(titulo, inicio, fin, {
+      location: ubicacion,
       description: [
         'Teléfono: ' + telefono,
-        'Total: ' + orden.total.toFixed(2) + ' €' + (totalBs !== null ? ' (Bs. ' + totalBs.toFixed(2) + ')' : ''),
+        modalidad === 'domicilio'
+          ? 'A domicilio: ' + direccion + ' (incluye ' + config_min_extra_(config) + ' min de traslado)'
+          : 'En el spa',
+        'Total: ' + orden.total.toFixed(2) + ' €' + (totalBs !== null ? ' (Bs. ' + totalBs.toFixed(2) + ')' : '') +
+          (orden.recargo > 0 ? ' · recargo domicilio ' + orden.recargo.toFixed(2) + ' €' : ''),
         'Pago: ' + metodoPago,
-        'Ref: ' + (esPagoMovil ? referencia : 'N/A'),
+        'Capture: ' + (comprobanteUrl || 'N/A'),
         'Cupón: ' + (orden.cupon ? orden.cupon.codigo : 'N/A'),
         'ID: ' + id,
       ].join('\n'),
     });
 
-    return json_({ success: true, id: id, total: orden.total, totalBs: totalBs, tasa: tasa ? tasa.valor : null });
+    return json_({
+      success: true,
+      id: id,
+      total: orden.total,
+      totalBs: totalBs,
+      tasa: tasa ? tasa.valor : null,
+      comprobanteUrl: comprobanteUrl || null,
+    });
   } catch (err) {
     console.error(err);
     return json_({ error: 'servidor', mensaje: 'No se pudo guardar la reserva. Intenta de nuevo.' });
@@ -421,7 +471,8 @@ function getOcupacionCalendario_(dias) {
 }
 
 /** Misma lógica de precios que src/lib/pricing.ts. */
-function calcularOrden_(ss, items, codigoCupon) {
+function calcularOrden_(ss, items, codigoCupon, modalidad, config) {
+  config = config || getConfig_(ss);
   items = items || {};
   const servicios = getServicios_(ss);
   const promos = getPromociones_(ss, servicios);
@@ -462,15 +513,40 @@ function calcularOrden_(ss, items, codigoCupon) {
     const raw = cupon.porcentaje > 0 ? subtotal * cupon.porcentaje / 100 : cupon.monto;
     descuento = round2_(Math.min(subtotal, Math.max(0, raw)));
   }
+  // A domicilio: recargo sobre el precio de los servicios (antes del cupón) y tiempo de traslado.
+  const aDomicilio = modalidad === 'domicilio' && lineas.length > 0;
+  const recargo = aDomicilio ? round2_(subtotal * config_recargo_pct_(config) / 100) : 0;
+  const minutosExtra = aDomicilio ? config_min_extra_(config) : 0;
   return {
     lineas: lineas,
     hasBase: lineas.some(function (l) { return l.base; }),
     subtotal: subtotal,
+    recargo: recargo,
     descuento: descuento,
-    total: round2_(subtotal - descuento),
-    duracion: Math.max(15, lineas.reduce(function (sum, l) { return sum + l.duracion; }, 0)),
+    total: round2_(subtotal + recargo - descuento),
+    duracion: Math.max(15, lineas.reduce(function (sum, l) { return sum + l.duracion; }, 0)) + minutosExtra,
     cupon: cupon,
   };
+}
+
+function config_recargo_pct_(config) {
+  const v = String(config.recargo_domicilio_pct || '').trim();
+  return v === '' ? 20 : toNumber_(v);
+}
+
+function config_min_extra_(config) {
+  const v = String(config.minutos_extra_domicilio || '').trim();
+  return v === '' ? 15 : Math.max(0, Math.round(toNumber_(v)));
+}
+
+/** Guarda el capture en Drive (carpeta privada de la dueña) y devuelve su enlace. */
+function guardarComprobante_(comprobante, nombreBase) {
+  const carpetas = DriveApp.getFoldersByName(CARPETA_COMPROBANTES);
+  const carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(CARPETA_COMPROBANTES);
+  const mime = /^image\/(jpeg|png|webp|heic|heif)$/.test(comprobante.mime) ? comprobante.mime : 'image/jpeg';
+  const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
+  const blob = Utilities.newBlob(Utilities.base64Decode(comprobante.base64), mime, nombreBase + ext);
+  return carpeta.createFile(blob).getUrl();
 }
 
 // ---------- Catálogo tolerante (misma lógica que src/lib/normalize.ts) ----------

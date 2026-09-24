@@ -36,7 +36,11 @@ export interface BusinessConfig {
   anticipacionMinHoras: number
   zonaHoraria: string
   pagoMovil: PagoMovilData
+  domicilio: { recargoPct: number; minutosExtra: number }
+  spa: { direccion: string; mapsUrl: string }
 }
+
+export type Modalidad = 'spa' | 'domicilio'
 
 export interface Tasa {
   /** Bolívares por 1 euro. */
@@ -69,11 +73,21 @@ export interface Cart {
   promos: string[]
 }
 
-export type Payment = { metodo: 'lugar' } | { metodo: 'pago_movil'; referencia: string }
+export interface Comprobante {
+  /** Imagen ya comprimida (data:image/jpeg;base64,…). */
+  dataUrl: string
+  nombre: string
+}
+
+export type Payment =
+  | { metodo: 'lugar' }
+  | { metodo: 'pago_movil'; pagado: boolean; comprobante: Comprobante | null }
 
 export interface Customer {
   nombre: string
   telefono: string
+  /** Solo para citas a domicilio. */
+  direccion: string
 }
 
 export interface Schedule {
@@ -91,8 +105,10 @@ export interface ReservationPayload {
   horaCita: string
   duracionTotalMin: number
   metodoPago: string
-  referencia: string
   cupon: string
+  modalidad: Modalidad
+  direccion: string
+  comprobante: { base64: string; mime: string; nombre: string } | null
 }
 
 export interface ReservationResult {
@@ -100,4 +116,5 @@ export interface ReservationResult {
   total: number
   totalBs: number | null
   tasa: number | null
+  comprobanteUrl: string | null
 }

@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react'
-import type { Cart, Coupon, Customer, Payment, Schedule } from '../types'
+import type { Cart, Comprobante, Coupon, Customer, Modalidad, Payment, Schedule } from '../types'
 
 export interface OrderState {
   cart: Cart
   coupon: Coupon | null
   schedule: Schedule | null
+  modalidad: Modalidad | null
   customer: Customer
   payment: Payment | null
 }
@@ -16,14 +17,17 @@ export type OrderAction =
   | { type: 'setSchedule'; schedule: Schedule | null }
   | { type: 'setCustomer'; customer: Partial<Customer> }
   | { type: 'setPaymentMethod'; metodo: Payment['metodo'] }
-  | { type: 'setReferencia'; referencia: string }
+  | { type: 'setModalidad'; modalidad: Modalidad }
+  | { type: 'setPagado'; pagado: boolean }
+  | { type: 'setComprobante'; comprobante: Comprobante | null }
   | { type: 'reset' }
 
 export const initialOrder: OrderState = {
   cart: { servicios: [], promos: [] },
   coupon: null,
   schedule: null,
-  customer: { nombre: '', telefono: '' },
+  modalidad: null,
+  customer: { nombre: '', telefono: '', direccion: '' },
   payment: null,
 }
 
@@ -46,11 +50,19 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
       if (state.payment?.metodo === action.metodo) return state
       return {
         ...state,
-        payment: action.metodo === 'pago_movil' ? { metodo: 'pago_movil', referencia: '' } : { metodo: 'lugar' },
+        payment:
+          action.metodo === 'pago_movil' ? { metodo: 'pago_movil', pagado: false, comprobante: null } : { metodo: 'lugar' },
       }
-    case 'setReferencia':
+    // A domicilio suma minutos: el cupo elegido deja de ser válido.
+    case 'setModalidad':
+      if (state.modalidad === action.modalidad) return state
+      return { ...state, modalidad: action.modalidad, schedule: null }
+    case 'setPagado':
       if (state.payment?.metodo !== 'pago_movil') return state
-      return { ...state, payment: { metodo: 'pago_movil', referencia: action.referencia.replace(/\D/g, '').slice(0, 20) } }
+      return { ...state, payment: { ...state.payment, pagado: action.pagado } }
+    case 'setComprobante':
+      if (state.payment?.metodo !== 'pago_movil') return state
+      return { ...state, payment: { ...state.payment, pagado: true, comprobante: action.comprobante } }
     case 'reset':
       return initialOrder
   }
@@ -58,7 +70,7 @@ export function orderReducer(state: OrderState, action: OrderAction): OrderState
 
 // El navegador puede recargar la pestaña al volver de la app del banco:
 // guardamos el borrador para no perder la orden.
-const STORAGE_KEY = 'mariana-nails:borrador:v1'
+const STORAGE_KEY = 'bymarianails:borrador:v2'
 
 function loadDraft(): OrderState {
   try {
@@ -78,7 +90,10 @@ function loadDraft(): OrderState {
 
 function saveDraft(state: OrderState) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    // La imagen del capture es pesada: no se guarda (se vuelve a subir si recarga).
+    const draft =
+      state.payment?.metodo === 'pago_movil' ? { ...state, payment: { ...state.payment, comprobante: null } } : state
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
   } catch {
     /* modo privado o almacenamiento bloqueado */
   }

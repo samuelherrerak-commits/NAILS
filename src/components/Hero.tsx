@@ -42,7 +42,7 @@ export function Hero({ config }: { config: BusinessConfig | null }) {
 
       <div className="relative flex items-center justify-between">
         <span className="font-display text-xl tracking-tight">
-          Mariana <span className="italic text-rose-deep">Nails</span>
+          <span className="text-muted">By</span>Maria<span className="italic text-rose-deep">Nails</span>
         </span>
         {DEMO_MODE && (
           <span className="rounded-full bg-sand px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted">

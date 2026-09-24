@@ -27,7 +27,7 @@ const OPTIONS = [
   {
     metodo: 'pago_movil' as const,
     title: METODO_LABEL.pago_movil,
-    description: 'Transfiere ahora a tasa BCV y deja tu número de referencia.',
+    description: 'Transfiere ahora a tasa BCV y sube el capture del pago.',
     Icon: IconPhone,
   },
 ]

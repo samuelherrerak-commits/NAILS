@@ -11,6 +11,8 @@ const config: BusinessConfig = {
   anticipacionMinHoras: 2,
   zonaHoraria: 'America/Caracas',
   pagoMovil: { banco: '', telefono: '', cedula: '' },
+  domicilio: { recargoPct: 20, minutosExtra: 15 },
+  spa: { direccion: '', mapsUrl: '' },
 }
 
 describe('zonedParts', () => {

@@ -90,3 +90,29 @@ export const IconArrowRight = (p: IconProps) => (
     <path d="M5 12h14M13 6l6 6-6 6" />
   </svg>
 )
+
+export const IconHome = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" />
+  </svg>
+)
+
+export const IconMapPin = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.3" />
+  </svg>
+)
+
+export const IconUpload = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 15V4M7.5 8.5L12 4l4.5 4.5" />
+    <path d="M4.5 14.5V18a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3.5" />
+  </svg>
+)
+
+export const IconCheck = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+)

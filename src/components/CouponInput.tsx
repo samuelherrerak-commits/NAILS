@@ -57,7 +57,7 @@ export function CouponInput({ coupon, descuento, onApply }: CouponInputProps) {
               <span className="text-muted">
                 {' · '}
                 {coupon.porcentaje > 0 ? `−${coupon.porcentaje}%` : `−${formatEUR(coupon.monto)}`}
-                {descuento > 0 && ` (${formatEUR(descuento, true)})`}
+                {coupon.porcentaje > 0 && descuento > 0 && ` (${formatEUR(descuento, true)})`}
               </span>
             </div>
             <button

@@ -78,5 +78,6 @@ export async function submitReservation(payload: ReservationPayload): Promise<Re
     total: toNumber(data.total, payload.total),
     totalBs: data.totalBs === null || data.totalBs === undefined ? null : toNumber(data.totalBs),
     tasa: data.tasa === null || data.tasa === undefined ? null : toNumber(data.tasa),
+    comprobanteUrl: str(data.comprobanteUrl) || null,
   }
 }
