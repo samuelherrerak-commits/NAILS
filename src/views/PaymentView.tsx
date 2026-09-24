@@ -12,10 +12,11 @@ import { METODO_LABEL, MODALIDAD_LABEL } from '../config'
 import { ApiError, submitReservation } from '../lib/api'
 import { capitalize, formatEUR, formatLongDate, formatTime12 } from '../lib/format'
 import { servicesText, type OrderSummary as Summary } from '../lib/pricing'
+import { buildGoogleCalendarUrl } from '../lib/calendar'
 import { splitDataUrl } from '../lib/image'
 import { buildWhatsAppMessage, buildWhatsAppUrl } from '../lib/whatsapp'
 import { useOrder } from '../state/order'
-import type { Catalog, ReservationPayload } from '../types'
+import type { Catalog, Modalidad, ReservationPayload } from '../types'
 
 interface PaymentViewProps {
   catalog: Catalog
@@ -23,8 +24,10 @@ interface PaymentViewProps {
   onBack: () => void
   /** El cupo se ocupó mientras la clienta llenaba el formulario. */
   onSlotTaken: () => void
-  onSuccess: (whatsappUrl: string) => void
+  onSuccess: (result: { whatsappUrl: string; calendarUrl: string; modalidad: Modalidad }) => void
 }
+
+const UBICACION_WHATSAPP = 'Ubicación por WhatsApp'
 
 export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }: PaymentViewProps) {
   const { state, dispatch } = useOrder()
@@ -33,11 +36,10 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
   const selectorRef = useRef<PaymentSelectorHandle>(null)
   const nombreRef = useRef<HTMLInputElement>(null)
   const telefonoRef = useRef<HTMLInputElement>(null)
-  const direccionRef = useRef<HTMLInputElement>(null)
   const comprobanteRef = useRef<HTMLDivElement>(null)
 
   const { customer, payment, schedule, coupon, modalidad } = state
-  const customerErrors = validateCustomer(customer, modalidad)
+  const customerErrors = validateCustomer(customer)
   const paymentError = attempted && !payment ? 'Elige cómo vas a pagar para continuar.' : null
   const comprobanteError =
     attempted && payment?.metodo === 'pago_movil' && !payment.comprobante
@@ -53,7 +55,6 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
     if (!schedule || !modalidad) return onBack()
     if (customerErrors.nombre) return nombreRef.current?.focus()
     if (customerErrors.telefono) return telefonoRef.current?.focus()
-    if (customerErrors.direccion) return direccionRef.current?.focus()
     if (!payment) return selectorRef.current?.flag()
     if (payment.metodo === 'pago_movil' && !payment.comprobante) {
       comprobanteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -72,7 +73,8 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
       metodoPago: METODO_LABEL[payment.metodo],
       cupon: coupon?.codigo ?? '',
       modalidad,
-      direccion: modalidad === 'domicilio' ? customer.direccion.trim() : '',
+      // La clienta envía su ubicación por WhatsApp (texto compatible con el Apps Script).
+      direccion: modalidad === 'domicilio' ? UBICACION_WHATSAPP : '',
       comprobante:
         payment.metodo === 'pago_movil' && payment.comprobante
           ? { ...splitDataUrl(payment.comprobante.dataUrl), nombre: payment.comprobante.nombre }
@@ -89,6 +91,16 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
         totalBs: result.totalBs ?? summary.totalBs,
       }
       const tasa = result.tasa ? { valor: result.tasa, fecha: catalog.tasa?.fecha ?? null, fuente: 'BCV' } : catalog.tasa
+      // Enlace corto: el lugar va en "location" y los detalles son mínimos.
+      const calendarUrl = buildGoogleCalendarUrl({
+        titulo: `Cita ${catalog.config.nombreNegocio} · ${servicesText(summary.lines)}`,
+        fecha: schedule.fecha,
+        hora: schedule.hora,
+        duracionMin: summary.duracionMin,
+        ubicacion: modalidad === 'domicilio' ? 'A domicilio' : catalog.config.spa.direccion || catalog.config.spa.mapsUrl,
+        detalles: `Total: ${formatEUR(finalSummary.total, true)}\nWhatsApp: https://wa.me/${catalog.config.whatsapp}`,
+        zonaHoraria: catalog.config.zonaHoraria,
+      })
       const message = buildWhatsAppMessage({
         negocio: catalog.config.nombreNegocio,
         customer,
@@ -101,8 +113,9 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
         tasa,
         reservaId: result.id,
         comprobanteUrl: result.comprobanteUrl,
+        calendarUrl,
       })
-      onSuccess(buildWhatsAppUrl(catalog.config.whatsapp, message))
+      onSuccess({ whatsappUrl: buildWhatsAppUrl(catalog.config.whatsapp, message), calendarUrl, modalidad })
     } catch (err) {
       setSubmitting(false)
       if (err instanceof ApiError && err.code === 'cupo_ocupado') {
@@ -163,7 +176,7 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
                   </a>
                 ) : (
                   <p className="text-[13px] text-muted">
-                    +{summary.recargoPct} % por traslado · te pedimos la dirección abajo
+                    +{summary.recargoPct} % por traslado · al terminar, envíanos tu ubicación 📍 por WhatsApp
                   </p>
                 )}
               </div>
@@ -193,8 +206,6 @@ export function PaymentView({ catalog, summary, onBack, onSlotTaken, onSuccess }
             showErrors={attempted}
             nombreRef={nombreRef}
             telefonoRef={telefonoRef}
-            direccionRef={direccionRef}
-            modalidad={modalidad}
           />
         </section>
 

@@ -1,22 +1,26 @@
 import { motion } from 'framer-motion'
 import { useEffect } from 'react'
 import { Button } from '../components/ui/Button'
-import { IconWhatsApp } from '../components/ui/icons'
+import { IconCalendar, IconWhatsApp } from '../components/ui/icons'
+import type { Modalidad } from '../types'
 import { spring } from '../lib/motion'
 
 interface SuccessViewProps {
   whatsappUrl: string
+  calendarUrl: string
+  modalidad: Modalidad
   onNew: () => void
 }
 
-const REDIRECT_MS = 1600
+// A domicilio se espera un poco más para que alcance a leer el recordatorio de la ubicación.
+const REDIRECT_MS = { spa: 1600, domicilio: 3200 } as const
 
-export function SuccessView({ whatsappUrl, onNew }: SuccessViewProps) {
+export function SuccessView({ whatsappUrl, calendarUrl, modalidad, onNew }: SuccessViewProps) {
   // Redirección automática; el botón queda como respaldo si el navegador la bloquea.
   useEffect(() => {
-    const t = setTimeout(() => window.location.assign(whatsappUrl), REDIRECT_MS)
+    const t = setTimeout(() => window.location.assign(whatsappUrl), REDIRECT_MS[modalidad])
     return () => clearTimeout(t)
-  }, [whatsappUrl])
+  }, [whatsappUrl, modalidad])
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-8 text-center">
@@ -45,6 +49,11 @@ export function SuccessView({ whatsappUrl, onNew }: SuccessViewProps) {
         <p className="mx-auto mt-3 max-w-[30ch] text-[15px] text-muted" role="status">
           Te estamos llevando a WhatsApp para enviar el resumen…
         </p>
+        {modalidad === 'domicilio' && (
+          <p className="mx-auto mt-4 max-w-[32ch] rounded-2xl bg-rose-soft px-4 py-3 text-[14px] text-ink">
+            📍 No olvides enviar tu <b className="font-semibold">ubicación</b> en el chat para llegar a tu casa.
+          </p>
+        )}
       </motion.div>
 
       <motion.div
@@ -55,6 +64,9 @@ export function SuccessView({ whatsappUrl, onNew }: SuccessViewProps) {
       >
         <Button block onClick={() => window.location.assign(whatsappUrl)}>
           <IconWhatsApp size={19} /> Abrir WhatsApp
+        </Button>
+        <Button block variant="secondary" onClick={() => window.open(calendarUrl, '_blank', 'noopener')}>
+          <IconCalendar size={19} /> Agregar a mi calendario
         </Button>
         <Button block variant="ghost" onClick={onNew}>
           Hacer otra reserva

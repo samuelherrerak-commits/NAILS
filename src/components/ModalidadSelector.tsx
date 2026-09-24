@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { formatDuration } from '../lib/format'
 import { spring, tap } from '../lib/motion'
 import type { BusinessConfig, Modalidad } from '../types'
@@ -60,6 +60,25 @@ export function ModalidadSelector({ value, onChange, config }: ModalidadSelector
           )
         })}
       </div>
+      <AnimatePresence initial={false}>
+        {value === 'domicilio' && (
+          <motion.p
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={spring.gentle}
+            className="overflow-hidden"
+          >
+            <span className="mt-2.5 flex items-start gap-2 rounded-xl bg-rose-soft px-3.5 py-3 text-[13px] leading-snug text-ink">
+              <span aria-hidden>📍</span>
+              <span>
+                Después de reservar, <b className="font-semibold">envíanos tu ubicación por WhatsApp</b> para llegar a
+                tu casa.
+              </span>
+            </span>
+          </motion.p>
+        )}
+      </AnimatePresence>
       <a
         href={config.spa.mapsUrl}
         target="_blank"

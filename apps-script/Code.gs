@@ -211,7 +211,8 @@ function doPost(e) {
     const metodoPago = String(data.metodoPago || '');
     const esPagoMovil = metodoPago === PAGO_MOVIL;
     const modalidad = String(data.modalidad || '');
-    const direccion = String(data.direccion || '').trim();
+    // A domicilio la clienta envía su ubicación por WhatsApp; el campo es opcional.
+    const direccion = String(data.direccion || '').trim() || (data.modalidad === 'domicilio' ? 'Ubicación por WhatsApp' : '');
     const comprobante = data.comprobante && data.comprobante.base64 ? data.comprobante : null;
 
     if (cliente.length < 2 || telefono.replace(/\D/g, '').length < 10 ||
@@ -224,9 +225,6 @@ function doPost(e) {
     }
     if (modalidad !== 'spa' && modalidad !== 'domicilio') {
       return json_({ error: 'datos_invalidos', mensaje: 'Elige si la cita es en el spa o a domicilio.' });
-    }
-    if (modalidad === 'domicilio' && direccion.length < 8) {
-      return json_({ error: 'datos_invalidos', mensaje: 'Falta la dirección para la cita a domicilio.' });
     }
     if (esPagoMovil && !comprobante) {
       return json_({ error: 'datos_invalidos', mensaje: 'Falta el capture del Pago Móvil.' });

@@ -6,6 +6,7 @@ import { useCatalog } from './hooks/useCatalog'
 import { spring } from './lib/motion'
 import { summarize } from './lib/pricing'
 import { useOrder } from './state/order'
+import type { Modalidad } from './types'
 import { AgendaView } from './views/AgendaView'
 import { CatalogView } from './views/CatalogView'
 import { PaymentView } from './views/PaymentView'
@@ -22,7 +23,7 @@ export default function App() {
   const [view, setView] = useState<View>('catalogo')
   const [direction, setDirection] = useState(1)
   const [cartOpen, setCartOpen] = useState(false)
-  const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null)
+  const [done, setDone] = useState<{ whatsappUrl: string; calendarUrl: string; modalidad: Modalidad } | null>(null)
   const catalogScroll = useRef(0)
 
   const summary = useMemo(
@@ -71,15 +72,15 @@ export default function App() {
     navigate('agenda')
   }
 
-  const onSuccess = (url: string) => {
-    setWhatsappUrl(url)
+  const onSuccess = (result: { whatsappUrl: string; calendarUrl: string; modalidad: Modalidad }) => {
+    setDone(result)
     dispatch({ type: 'reset' })
     window.history.replaceState({ view: 'listo' }, '')
     show('listo')
   }
 
   const startOver = () => {
-    setWhatsappUrl(null)
+    setDone(null)
     window.history.replaceState({ view: 'catalogo' }, '')
     catalogScroll.current = 0
     show('catalogo')
@@ -107,8 +108,8 @@ export default function App() {
         onSuccess={onSuccess}
       />
     )
-  } else if (view === 'listo' && whatsappUrl) {
-    page = <SuccessView whatsappUrl={whatsappUrl} onNew={startOver} />
+  } else if (view === 'listo' && done) {
+    page = <SuccessView {...done} onNew={startOver} />
   }
 
   return (

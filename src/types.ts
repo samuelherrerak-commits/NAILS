@@ -86,8 +86,6 @@ export type Payment =
 export interface Customer {
   nombre: string
   telefono: string
-  /** Solo para citas a domicilio. */
-  direccion: string
 }
 
 export interface Schedule {

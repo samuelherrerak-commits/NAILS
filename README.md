@@ -1,6 +1,6 @@
 # ByMariaNails · Reservas
 
-Landing page **estática y mobile-first** para reservar citas de uñas con ByMariaNails. La clienta elige servicios, promociones y adicionales, indica si la cita es **en el spa o a domicilio** (+20 % y 15 min de traslado), aplica un cupón, escoge fecha y hora libres y asigna **obligatoriamente** su método de pago: pago en la cita, o Pago Móvil con **"Copiar todo"**, **"Ya pagué"** y el **capture** del pago. Al confirmar, la reserva se guarda en Google Sheets, Google Calendar y Drive (el capture), y la clienta pasa a WhatsApp con un mensaje ya armado.
+Landing page **estática y mobile-first** para reservar citas de uñas con ByMariaNails. La clienta elige servicios, promociones y adicionales, indica si la cita es **en el spa o a domicilio** (+20 % y 15 min de traslado), aplica un cupón, escoge fecha y hora libres y asigna **obligatoriamente** su método de pago: pago en la cita, o Pago Móvil con **"Copiar todo"**, **"Ya pagué"** y el **capture** del pago. Al confirmar, la reserva se guarda en Google Sheets, Google Calendar y Drive (el capture), y la clienta pasa a WhatsApp con un mensaje ya armado. El mensaje trae un enlace **"Agregar a Google Calendar"** con la cita ya llena, y a domicilio le recuerda **enviar su ubicación por el chat** (no se pide dirección en la página, así no hace falta ninguna API de mapas).
 
 - **Front:** Vite + React + TypeScript + Tailwind CSS v4 + Framer Motion + Sonner.
 - **Backend:** Google Apps Script (`apps-script/Code.gs`) sobre Google Sheets y Google Calendar.

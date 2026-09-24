@@ -27,7 +27,7 @@ export const initialOrder: OrderState = {
   coupon: null,
   schedule: null,
   modalidad: null,
-  customer: { nombre: '', telefono: '', direccion: '' },
+  customer: { nombre: '', telefono: '' },
   payment: null,
 }
 
