@@ -3,9 +3,9 @@ import type { Promo, Service } from '../types'
 import { couponDiscount, summarize, toBs } from './pricing'
 
 const servicios: Service[] = [
-  { id: 'S1', nombre: 'Mani', precio: 12, duracionMin: 60, tipo: 'base' },
-  { id: 'S2', nombre: 'Pedi', precio: 15, duracionMin: 60, tipo: 'base' },
-  { id: 'A1', nombre: 'Arte', precio: 3, duracionMin: 15, tipo: 'adicional' },
+  { id: 'S1', nombre: 'Mani', precio: 12, duracionMin: 60, tipo: 'base', categoria: 'Servicios' },
+  { id: 'S2', nombre: 'Pedi', precio: 15, duracionMin: 60, tipo: 'base', categoria: 'Servicios' },
+  { id: 'A1', nombre: 'Arte', precio: 3, duracionMin: 15, tipo: 'adicional', categoria: 'Servicios' },
 ]
 const promociones: Promo[] = [{ id: 'P1', nombre: 'Mani + Pedi', servicioIds: ['S1', 'S2'], precio: 24 }]
 const catalog = { servicios, promociones, tasa: { valor: 400.5, fecha: null, fuente: 'BCV' } }

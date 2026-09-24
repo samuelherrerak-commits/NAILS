@@ -5,10 +5,8 @@ import { buildAgenda, busyByDay, slotsForDay, zonedParts } from './slots'
 const config: BusinessConfig = {
   nombreNegocio: 'Mariana',
   whatsapp: '584122516390',
-  horaApertura: 9 * 60,
-  horaCierre: 13 * 60,
+  horario: [[], [[540, 780]], [[540, 780]], [[540, 780]], [[540, 780]], [[540, 780]], [[540, 780]]],
   intervaloMin: 60,
-  diasLaborales: [1, 2, 3, 4, 5, 6],
   diasAnticipacion: 7,
   anticipacionMinHoras: 2,
   zonaHoraria: 'America/Caracas',
@@ -47,6 +45,21 @@ describe('slotsForDay', () => {
     const now = { ymd: '2026-09-24', minutes: 8 * 60 + 30 } // 8:30 + 2 h → desde 10:30
     const slots = slotsForDay('2026-09-24', config, 60, [], now)
     expect(slots.filter((s) => s.estado === 'pasado').map((s) => s.hora)).toEqual(['09:00', '10:00'])
+  })
+})
+
+describe('horario con pausa', () => {
+  it('respeta varios tramos en el mismo día', () => {
+    const cfg = { ...config, horario: config.horario.map((_, d) => (d === 4 ? [[540, 720], [840, 960]] as Array<[number, number]> : [])) }
+    const slots = slotsForDay('2026-09-24', cfg, 60, [], { ymd: '2026-09-01', minutes: 0 })
+    expect(slots.map((s) => s.hora)).toEqual(['09:00', '10:00', '11:00', '14:00', '15:00'])
+  })
+
+  it('un bloqueo de día completo deja el día sin cupos libres', () => {
+    const now = new Date('2026-09-24T10:00:00Z')
+    const bloqueo = [{ inicio: new Date('2026-09-26T04:00:00Z'), fin: new Date('2026-09-27T04:00:00Z') }]
+    const days = buildAgenda(config, bloqueo, 60, now)
+    expect(days.find((d) => d.fecha === '2026-09-26')?.libres).toBe(0)
   })
 })
 

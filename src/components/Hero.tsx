@@ -7,11 +7,27 @@ import { IconClock, IconSparkle } from './ui/icons'
 
 const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
-function daysLabel(days: number[]): string {
-  const sorted = [...days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)) // lunes primero
-  const consecutive = sorted.every((d, i) => i === 0 || d === (sorted[i - 1] + 1) % 7)
-  if (consecutive && sorted.length > 2) return `${DAY_SHORT[sorted[0]]}–${DAY_SHORT[sorted[sorted.length - 1]]}`
-  return sorted.map((d) => DAY_SHORT[d]).join(', ')
+/** "Lun–Vie 09:00–19:00 · Sáb 09:00–14:00": agrupa días consecutivos con el mismo horario. */
+export function scheduleLabel(horario: Array<Array<[number, number]>>): string {
+  const order = [1, 2, 3, 4, 5, 6, 0]
+  const key = (d: number) => horario[d].map(([a, b]) => `${toHHMM(a)}–${toHHMM(b)}`).join(', ')
+  const groups: Array<{ days: number[]; hours: string }> = []
+  for (const d of order) {
+    if (!horario[d]?.length) continue
+    const last = groups[groups.length - 1]
+    const prevDay = last?.days[last.days.length - 1]
+    if (last && last.hours === key(d) && order.indexOf(d) === order.indexOf(prevDay) + 1) last.days.push(d)
+    else groups.push({ days: [d], hours: key(d) })
+  }
+  return groups
+    .map((g) => {
+      const days =
+        g.days.length > 2
+          ? `${DAY_SHORT[g.days[0]]}–${DAY_SHORT[g.days[g.days.length - 1]]}`
+          : g.days.map((d) => DAY_SHORT[d]).join(' y ')
+      return `${days} ${g.hours}`
+    })
+    .join(' · ')
 }
 
 export function Hero({ config }: { config: BusinessConfig | null }) {
@@ -51,9 +67,9 @@ export function Hero({ config }: { config: BusinessConfig | null }) {
           Elige tus servicios, aparta tu horario y confirma por WhatsApp.
         </p>
         {config && (
-          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-surface/80 px-3.5 py-2 text-[13px] text-ink shadow-card ring-1 ring-line backdrop-blur">
+          <p className="mt-5 inline-flex max-w-full items-center gap-2 rounded-2xl bg-surface/80 px-3.5 py-2 text-[13px] text-ink shadow-card ring-1 ring-line backdrop-blur">
             <IconClock size={16} className="text-rose-deep" />
-            {daysLabel(config.diasLaborales)} · {toHHMM(config.horaApertura)}–{toHHMM(config.horaCierre)}
+            {scheduleLabel(config.horario)}
           </p>
         )}
       </motion.div>

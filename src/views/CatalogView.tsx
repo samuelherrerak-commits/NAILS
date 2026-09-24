@@ -31,7 +31,14 @@ export function CatalogView({ catalog, status, error, onRetry, summary }: Catalo
     dispatch({ type: 'togglePromo', id })
   }
 
-  const base = catalog?.servicios.filter((s) => s.tipo === 'base') ?? []
+  // Servicios base agrupados por la columna Tipo, en el orden de la hoja.
+  const groups: Array<{ categoria: string; items: Service[] }> = []
+  for (const s of catalog?.servicios ?? []) {
+    if (s.tipo !== 'base') continue
+    const group = groups.find((g) => g.categoria === s.categoria)
+    if (group) group.items.push(s)
+    else groups.push({ categoria: s.categoria, items: [s] })
+  }
   const extras = catalog?.servicios.filter((s) => s.tipo === 'adicional') ?? []
 
   return (
@@ -61,38 +68,53 @@ export function CatalogView({ catalog, status, error, onRetry, summary }: Catalo
           animate="show"
           variants={{ show: { transition: { staggerChildren: 0.06 } } }}
         >
-          <Reveal>
-            <PromoCarousel
-              promos={catalog.promociones}
-              servicios={catalog.servicios}
-              selected={state.cart.promos}
-              onToggle={togglePromo}
-            />
-          </Reveal>
+          {catalog.promociones.length > 0 && (
+            <Reveal>
+              <PromoCarousel
+                promos={catalog.promociones}
+                servicios={catalog.servicios}
+                selected={state.cart.promos}
+                onToggle={togglePromo}
+              />
+            </Reveal>
+          )}
 
-          <Reveal>
-            <ServiceSection
-              id="base"
-              title="Servicios"
-              subtitle="Elige uno o más."
-              services={base}
-              selected={state.cart.servicios}
-              onToggle={toggleService}
-            />
-          </Reveal>
+          {catalog.servicios.length === 0 && (
+            <Reveal>
+              <div className="mx-5 rounded-3xl bg-surface p-6 text-center shadow-card ring-1 ring-line">
+                <p className="font-display text-2xl">Aún no hay servicios disponibles</p>
+                <p className="mt-2 text-[14px] text-muted">Escríbenos por WhatsApp y te atendemos.</p>
+              </div>
+            </Reveal>
+          )}
 
-          <Reveal>
-            <ServiceSection
-              id="adicionales"
-              title="Adicionales"
-              subtitle={
-                summary.hasBase ? 'Se suman a tu servicio.' : 'Se suman a un servicio base o promoción.'
-              }
-              services={extras}
-              selected={state.cart.servicios}
-              onToggle={toggleService}
-            />
-          </Reveal>
+          {groups.map((group, i) => (
+            <Reveal key={group.categoria}>
+              <ServiceSection
+                id={`cat-${i}`}
+                title={group.categoria}
+                subtitle={i === 0 ? 'Elige uno o más.' : ''}
+                services={group.items}
+                selected={state.cart.servicios}
+                onToggle={toggleService}
+              />
+            </Reveal>
+          ))}
+
+          {extras.length > 0 && (
+            <Reveal>
+              <ServiceSection
+                id="adicionales"
+                title="Adicionales"
+                subtitle={
+                  summary.hasBase ? 'Se suman a tu servicio.' : 'Se suman a un servicio base o promoción.'
+                }
+                services={extras}
+                selected={state.cart.servicios}
+                onToggle={toggleService}
+              />
+            </Reveal>
+          )}
 
           <footer className="px-5 pt-4 text-center text-[13px] text-muted">
             <a
@@ -141,7 +163,7 @@ function ServiceSection({
       <h2 id={`${id}-title`} className="font-display text-[26px] tracking-[-0.01em]">
         {title}
       </h2>
-      <p className="mt-0.5 text-[14px] text-muted">{subtitle}</p>
+      {subtitle && <p className="mt-0.5 text-[14px] text-muted">{subtitle}</p>}
       <div className="mt-4 space-y-2.5">
         {services.map((s) => (
           <ServiceCard key={s.id} service={s} selected={selected.includes(s.id)} onToggle={() => onToggle(s.id)} />

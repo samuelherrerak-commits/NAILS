@@ -102,11 +102,14 @@ export function slotsForDay(
   const minStart =
     fecha === now.ymd ? now.minutes + config.anticipacionMinHoras * 60 : fecha < now.ymd ? Infinity : -Infinity
 
-  for (let start = config.horaApertura; start + dur <= config.horaCierre; start += step) {
-    let estado: SlotState = 'libre'
-    if (start < minStart) estado = 'pasado'
-    else if (busy.some(([b0, b1]) => overlaps(start, start + dur, b0, b1))) estado = 'reservado'
-    slots.push({ hora: toHHMM(start), minutos: start, estado })
+  // Cada tramo del día (p. ej. 9–12 y 14–19 si hay pausa de almuerzo).
+  for (const [abre, cierra] of config.horario[weekdayOf(fecha)] ?? []) {
+    for (let start = abre; start + dur <= cierra; start += step) {
+      let estado: SlotState = 'libre'
+      if (start < minStart) estado = 'pasado'
+      else if (busy.some(([b0, b1]) => overlaps(start, start + dur, b0, b1))) estado = 'reservado'
+      slots.push({ hora: toHHMM(start), minutos: start, estado })
+    }
   }
   return slots
 }
@@ -124,7 +127,7 @@ export function buildAgenda(
   for (let i = 0; i < config.diasAnticipacion; i++) {
     const fecha = addDays(now.ymd, i)
     const weekday = weekdayOf(fecha)
-    if (!config.diasLaborales.includes(weekday)) continue
+    if (!config.horario[weekday]?.length) continue // cerrado
     const slots = slotsForDay(fecha, config, duracionMin, busy.get(fecha) ?? [], now)
     days.push({ fecha, weekday, slots, libres: slots.filter((s) => s.estado === 'libre').length })
   }

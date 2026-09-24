@@ -30,10 +30,10 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 1. Crea una hoja de cálculo en Google Sheets y abre **Extensiones → Apps Script**.
 2. Pega el contenido de `apps-script/Code.gs`.
 3. En **Configuración del proyecto (⚙️)**, cambia la **zona horaria** a `America/Caracas`.
-4. Ejecuta **`setupDatabase`** y acepta los permisos. Crea las hojas, los encabezados, las claves de configuración y el calendario "Citas Mariana". Si ya tenías las hojas del script anterior, solo agrega las columnas que falten.
+4. Ejecuta **`setupDatabase`** y acepta los permisos. Crea las hojas (incluidas **Horarios** y **Bloqueos**), los encabezados, las claves de configuración y el calendario "Citas Mariana". Si ya tenías hojas, no borra nada: solo agrega lo que falte.
 5. (Opcional) Ejecuta **`seedDemoData`** para cargar servicios, promociones y el cupón `BIENVENIDA` de ejemplo.
 6. Completa la hoja **Configuracion** (tabla más abajo), sobre todo los datos de Pago Móvil.
-7. Ejecuta **`probarTasa`** y revisa los registros para confirmar que se obtiene la tasa BCV del euro.
+7. Ejecuta **`diagnostico`** para ver los servicios, promociones y horarios que va a recibir la página, y **`probarTasa`** para confirmar que se obtiene la tasa BCV del euro.
 8. Ve a **Implementar → Nueva implementación → Aplicación web**, con *Ejecutar como: Yo* y *Quién tiene acceso: Cualquier persona*. Copia la URL.
 9. Cada vez que cambies el código, entra en **Implementar → Gestionar implementaciones → ✏️ → Versión: Nueva versión**. Así la URL no cambia.
 
@@ -41,8 +41,10 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 
 | Hoja | Columnas | Notas |
 | --- | --- | --- |
-| `Servicios` | `ID, Nombre, Precio, Duracion_Min, Tipo` | `Tipo` es `Base` o `Adicional`. `Precio` va en euros. |
-| `Promociones` | `ID, Nombre, Servicios_Incluidos, Precio_Promo` | `Servicios_Incluidos` son IDs separados por comas, por ejemplo `S1, S2`. |
+| `Servicios` | `ID, Nombre, Precio, Duracion_Min, Tipo` | El `ID` es opcional: si está vacío se genera a partir del nombre. `Tipo` es la categoría con la que se agrupan en la página ("Manos", "Pies"…); escribe `Adicional` para los extras que se suman a un servicio. `Precio` va en euros. |
+| `Promociones` | `ID, Nombre, Servicios_Incluidos, Precio_Promo` | `Servicios_Incluidos` acepta IDs o nombres separados por comas, por ejemplo `Manicure, Nivelacion`. |
+| `Horarios` | `Dia, Hora_Inicio, Hora_Fin` | Tu horario semanal. Una fila por tramo; puedes repetir el día para una pausa (Lunes 09:00–12:00 y Lunes 14:00–18:00). Deja las horas vacías para cerrar ese día. |
+| `Bloqueos` | `Fecha, Hora_Inicio, Hora_Fin, Motivo` | Cierra fechas u horas puntuales (vacaciones, citas por fuera). Sin horas, bloquea el día completo. El motivo no se muestra a las clientas. |
 | `Cupones` | `Codigo, Descuento_Porcentaje, Descuento_Monto, Usos_Restantes` | Se usa el porcentaje si es mayor que 0; si no, el monto en €. Si `Usos_Restantes` está vacío, el cupón es ilimitado. |
 | `Reservaciones` | `ID, Fecha_Solicitud, Cliente, Telefono, Servicios, Total, Fecha_Cita, Hora_Cita, Metodo_Pago, Referencia, Cupon, Estado, Tasa_BCV, Total_Bs` | La llena el script. Las reservas con Pago Móvil entran con estado `Pago por verificar`. |
 | `Configuracion` | `Clave, Valor` | Ver la tabla siguiente. |
@@ -53,15 +55,16 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 | --- | --- | --- |
 | `nombre_negocio` | `Mariana` | Saludo del mensaje de WhatsApp. |
 | `whatsapp` | `584122516390` | Número que recibe las reservas. |
-| `hora_apertura` / `hora_cierre` | `09:00` / `19:00` | Horario de atención. |
+| `hora_apertura` / `hora_cierre` / `dias_laborales` | `09:00` / `19:00` / `1,2,3,4,5,6` | Solo se usan para crear la pestaña Horarios la primera vez (o si queda vacía). |
 | `intervalo_min` | `30` | Minutos entre un cupo y el siguiente. |
-| `dias_laborales` | `1,2,3,4,5,6` | 0 = domingo … 6 = sábado. |
 | `dias_anticipacion` | `21` | Cuántos días hacia adelante se muestran. |
 | `anticipacion_min_horas` | `2` | Horas mínimas de aviso para reservar hoy. |
 | `pm_banco`, `pm_telefono`, `pm_cedula` | `Banesco (0134)`, `0412-2516390`, `V-12.345.678` | Datos de Pago Móvil que ve la clienta. |
 | `tasa_eur_manual` | `412,35` | Solo se usa si no se puede obtener la tasa BCV. |
 
-**Bloquear días u horas:** crea un evento en el calendario "Citas Mariana". Un evento de todo el día bloquea el día completo.
+**Bloquear días u horas:** agrega una fila en la pestaña **Bloqueos**, o crea un evento en el calendario "Citas Mariana" (un evento de todo el día bloquea el día completo).
+
+**Después de cambiar el código del script** entra en **Implementar → Gestionar implementaciones → ✏️ → Versión: Nueva versión → Implementar**. Si en cambio creas una implementación nueva, la URL cambia y hay que actualizarla en `render.yaml`. Los cambios en la hoja (servicios, horarios, bloqueos) se ven al instante, sin volver a implementar.
 
 ### Tasa BCV del euro
 

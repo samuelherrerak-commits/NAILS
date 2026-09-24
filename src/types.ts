@@ -6,6 +6,8 @@ export interface Service {
   precio: number
   duracionMin: number
   tipo: ServiceKind
+  /** Columna Tipo de la hoja ("Manos", "Pies"…); agrupa los servicios base. */
+  categoria: string
 }
 
 export interface Promo {
@@ -24,12 +26,12 @@ export interface PagoMovilData {
 export interface BusinessConfig {
   nombreNegocio: string
   whatsapp: string
-  /** Minutos desde medianoche (hora de Caracas). */
-  horaApertura: number
-  horaCierre: number
+  /**
+   * Tramos de atención por día de la semana (0 = domingo … 6 = sábado),
+   * en minutos desde medianoche (hora de Caracas). Día sin tramos = cerrado.
+   */
+  horario: Array<Array<[number, number]>>
   intervaloMin: number
-  /** 0 = domingo … 6 = sábado */
-  diasLaborales: number[]
   diasAnticipacion: number
   anticipacionMinHoras: number
   zonaHoraria: string

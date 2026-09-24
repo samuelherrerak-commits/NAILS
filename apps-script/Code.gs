@@ -6,7 +6,9 @@
  *   2. Configuración del proyecto (⚙️) > Zona horaria: America/Caracas
  *      (o copia apps-script/appsscript.json en el editor).
  *   3. Ejecuta `setupDatabase` una vez (pide permisos). Opcional: `seedDemoData`.
- *   4. Llena la hoja "Configuracion" (datos de Pago Móvil, horario, etc.).
+ *   4. Llena "Configuracion" (datos de Pago Móvil) y "Horarios" (tu horario semanal).
+ *      En "Bloqueos" cierras fechas u horas puntuales (vacaciones, citas por fuera).
+ *      Ejecuta `diagnostico` para ver qué está leyendo el sistema.
  *   5. Ejecuta `probarTasa` para comprobar que la tasa BCV del euro se obtiene bien.
  *   6. Implementar > Nueva implementación > Aplicación web
  *      Ejecutar como: Yo · Quién tiene acceso: Cualquier persona.
@@ -30,7 +32,11 @@ const SHEETS = [
   { name: 'Promociones', headers: ['ID', 'Nombre', 'Servicios_Incluidos', 'Precio_Promo'] },
   { name: 'Cupones', headers: ['Codigo', 'Descuento_Porcentaje', 'Descuento_Monto', 'Usos_Restantes'] },
   { name: 'Configuracion', headers: ['Clave', 'Valor'] },
+  { name: 'Horarios', headers: ['Dia', 'Hora_Inicio', 'Hora_Fin'] },
+  { name: 'Bloqueos', headers: ['Fecha', 'Hora_Inicio', 'Hora_Fin', 'Motivo'] },
 ];
+
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 // Claves que lee la landing. Los valores vacíos se completan en la hoja.
 const CONFIG_DEFAULTS = [
@@ -83,6 +89,21 @@ function setupDatabase() {
     if (!(kv[0] in existentes)) config.appendRow(kv);
   });
 
+  // Horarios: texto plano y, si está vacía, se siembra con el horario de Configuracion.
+  const horarios = ss.getSheetByName('Horarios');
+  horarios.getRange('A:C').setNumberFormat('@');
+  if (horarios.getLastRow() < 2) {
+    const cfg = getConfig_(ss);
+    const dias = String(cfg.dias_laborales || '1,2,3,4,5,6').split(/[,;\s]+/).map(Number);
+    const rows = [1, 2, 3, 4, 5, 6, 0].map(function (d) {
+      return dias.indexOf(d) === -1
+        ? [DIAS_SEMANA[d], '', '']
+        : [DIAS_SEMANA[d], cfg.hora_apertura || '09:00', cfg.hora_cierre || '19:00'];
+    });
+    horarios.getRange(2, 1, rows.length, 3).setValues(rows);
+  }
+  ss.getSheetByName('Bloqueos').getRange('B:C').setNumberFormat('@');
+
   getCalendar_();
 }
 
@@ -128,12 +149,18 @@ function doGet(e) {
     }
 
     const config = getConfig_(ss);
+    const dias = Number(config.dias_anticipacion) || 21;
+    const servicios = getServicios_(ss);
     return json_({
-      servicios: getSheetData_(ss, 'Servicios'),
-      promociones: getSheetData_(ss, 'Promociones'),
+      servicios: servicios,
+      promociones: getPromociones_(ss, servicios),
       config: config, // la lista de cupones NO se envía al navegador
+      horarios: getHorarios_(ss, config),
       tasa: getTasaEuroBCV(),
-      citasAgendadas: getOcupacionCalendario_(Number(config.dias_anticipacion) || 21),
+      // Citas del calendario + bloqueos de la hoja, solo como rangos (sin nombres ni motivos).
+      citasAgendadas: getOcupacionCalendario_(dias).concat(getBloqueos_(ss, dias).map(function (b) {
+        return { inicio: b.inicio.toISOString(), fin: b.fin.toISOString() };
+      })),
     });
   } catch (err) {
     console.error(err);
@@ -199,6 +226,22 @@ function doPost(e) {
     if (inicio.getTime() < Date.now()) {
       return json_({ error: 'cupo_ocupado', mensaje: 'Ese horario ya pasó.' });
     }
+    // Debe caber completo dentro de un tramo del horario de ese día.
+    const minInicio = toMinutes_(horaCita);
+    const minFin = minInicio + orden.duracion;
+    const diaSemana = Number(Utilities.formatDate(inicio, ZONA, 'u')) % 7; // 1 = lunes … 7 = domingo
+    const tramos = getHorarios_(ss, getConfig_(ss)).filter(function (t) { return t.dia === diaSemana; });
+    const dentro = tramos.some(function (t) {
+      return minInicio >= toMinutes_(t.inicio) && minFin <= toMinutes_(t.fin);
+    });
+    if (!dentro) {
+      return json_({ error: 'cupo_ocupado', mensaje: 'Ese horario está fuera de nuestro horario de atención.' });
+    }
+    const bloqueado = getBloqueos_(ss, 400).some(function (b) { return b.inicio < fin && b.fin > inicio; });
+    if (bloqueado) {
+      return json_({ error: 'cupo_ocupado', mensaje: 'Ese horario no está disponible.' });
+    }
+
     const calendar = getCalendar_();
     const choques = calendar.getEvents(new Date(inicio.getTime() - 86400000), new Date(fin.getTime() + 86400000))
       .filter(function (ev) { return ev.getStartTime() < fin && ev.getEndTime() > inicio; });
@@ -380,25 +423,24 @@ function getOcupacionCalendario_(dias) {
 /** Misma lógica de precios que src/lib/pricing.ts. */
 function calcularOrden_(ss, items, codigoCupon) {
   items = items || {};
-  const servicios = getSheetData_(ss, 'Servicios');
-  const promos = getSheetData_(ss, 'Promociones');
+  const servicios = getServicios_(ss);
+  const promos = getPromociones_(ss, servicios);
   const byId = {};
-  servicios.forEach(function (s) { byId[String(s.ID).trim()] = s; });
+  servicios.forEach(function (s) { byId[s.ID] = s; });
   const unique = function (list) {
     return (Array.isArray(list) ? list : []).map(String).filter(function (x, i, a) { return a.indexOf(x) === i; });
   };
 
   const lineas = [];
   unique(items.promos).forEach(function (id) {
-    const p = promos.filter(function (x) { return String(x.ID).trim() === id; })[0];
+    const p = promos.filter(function (x) { return x.ID === id; })[0];
     if (!p) return;
-    const incluidos = String(p.Servicios_Incluidos).split(/[,;|]/)
-      .map(function (x) { return byId[x.trim()]; })
-      .filter(Boolean);
     lineas.push({
       nombre: String(p.Nombre),
       precio: toNumber_(p.Precio_Promo),
-      duracion: incluidos.reduce(function (sum, s) { return sum + (toNumber_(s.Duracion_Min) || 60); }, 0),
+      duracion: p.Servicios_Incluidos.reduce(function (sum, sid) {
+        return sum + (toNumber_(byId[sid].Duracion_Min) || 60);
+      }, 0),
       base: true,
     });
   });
@@ -409,7 +451,7 @@ function calcularOrden_(ss, items, codigoCupon) {
       nombre: String(s.Nombre),
       precio: toNumber_(s.Precio),
       duracion: toNumber_(s.Duracion_Min) || 60,
-      base: !/adic/i.test(String(s.Tipo)),
+      base: !/adic|extra/i.test(String(s.Tipo)),
     });
   });
 
@@ -429,6 +471,179 @@ function calcularOrden_(ss, items, codigoCupon) {
     duracion: Math.max(15, lineas.reduce(function (sum, l) { return sum + l.duracion; }, 0)),
     cupon: cupon,
   };
+}
+
+// ---------- Catálogo tolerante (misma lógica que src/lib/normalize.ts) ----------
+
+/** "Duración (min)" → "duracionmin" */
+function normKey_(value) {
+  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** "Nivelación Gel" → "nivelacion-gel" (igual que slug() del front). */
+function slug_(value) {
+  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'item';
+}
+
+/** Valor de una columna aceptando variantes del encabezado. */
+function pick_(row, names) {
+  const wanted = names.map(normKey_);
+  for (const k in row) if (wanted.indexOf(normKey_(k)) !== -1) return row[k];
+  return '';
+}
+
+/** Rellena IDs vacíos con el nombre en slug (con sufijo -2, -3 si se repite). */
+function assignIds_(items) {
+  const used = {};
+  items.forEach(function (it) {
+    let id = String(it.ID || '').trim() || slug_(it.Nombre);
+    if (used[id]) {
+      let n = 2;
+      while (used[id + '-' + n]) n++;
+      id = id + '-' + n;
+    }
+    used[id] = true;
+    it.ID = id;
+  });
+  return items;
+}
+
+function getServicios_(ss) {
+  const rows = getSheetData_(ss, 'Servicios').map(function (r) {
+    return {
+      ID: String(pick_(r, ['ID'])).trim(),
+      Nombre: String(pick_(r, ['Nombre', 'Servicio'])).trim(),
+      Precio: toNumber_(pick_(r, ['Precio'])),
+      Duracion_Min: toNumber_(pick_(r, ['Duracion_Min', 'Duracion', 'DuracionMin', 'Minutos'])) || 60,
+      Tipo: String(pick_(r, ['Tipo', 'Categoria'])).trim(),
+    };
+  }).filter(function (s) { return s.Nombre; });
+  return assignIds_(rows);
+}
+
+/** Promociones con Servicios_Incluidos resuelto a IDs (acepta IDs o nombres). */
+function getPromociones_(ss, servicios) {
+  const find = function (ref) {
+    const key = normKey_(ref);
+    const s = servicios.filter(function (x) { return normKey_(x.ID) === key; })[0] ||
+      servicios.filter(function (x) { return normKey_(x.Nombre) === key; })[0];
+    return s ? s.ID : null;
+  };
+  const rows = getSheetData_(ss, 'Promociones').map(function (r) {
+    return {
+      ID: String(pick_(r, ['ID'])).trim(),
+      Nombre: String(pick_(r, ['Nombre', 'Promocion'])).trim(),
+      Servicios_Incluidos: String(pick_(r, ['Servicios_Incluidos', 'Servicios'])).split(/[,;|+]/)
+        .map(function (x) { return x.trim(); }).filter(Boolean).map(find).filter(Boolean),
+      Precio_Promo: toNumber_(pick_(r, ['Precio_Promo', 'Precio'])),
+    };
+  }).filter(function (p) { return p.Nombre && p.Servicios_Incluidos.length > 0; });
+  return assignIds_(rows);
+}
+
+// ---------- Horario semanal y bloqueos ----------
+
+function parseDia_(value) {
+  const s = normKey_(value);
+  if (/^[0-6]$/.test(s)) return Number(s);
+  if (s === '7') return 0;
+  const map = { domingo: 0, dom: 0, lunes: 1, lun: 1, martes: 2, mar: 2, miercoles: 3, mie: 3,
+    jueves: 4, jue: 4, viernes: 5, vie: 5, sabado: 6, sab: 6 };
+  return s in map ? map[s] : null;
+}
+
+/** "9:00" → 540; NaN si no es una hora. */
+function toMinutes_(value) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(value).trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+}
+
+function hhmm_(min) {
+  return ('0' + Math.floor(min / 60)).slice(-2) + ':' + ('0' + (min % 60)).slice(-2);
+}
+
+/**
+ * Tramos de atención [{dia: 0-6, inicio: 'HH:MM', fin: 'HH:MM'}].
+ * Sin pestaña Horarios (o vacía) se usan hora_apertura/hora_cierre/dias_laborales.
+ */
+function getHorarios_(ss, config) {
+  const out = [];
+  const sheet = ss.getSheetByName('Horarios');
+  if (sheet && sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getDisplayValues().forEach(function (r) {
+      const dia = parseDia_(r[0]);
+      const a = toMinutes_(r[1]);
+      const b = toMinutes_(r[2]);
+      if (dia === null || isNaN(a) || isNaN(b) || b <= a) return;
+      out.push({ dia: dia, inicio: hhmm_(a), fin: hhmm_(b) });
+    });
+    if (out.length) return out.sort(function (x, y) { return (x.dia + 6) % 7 - (y.dia + 6) % 7 || (x.inicio < y.inicio ? -1 : 1); });
+  }
+  const a = toMinutes_(config.hora_apertura || '09:00');
+  const b = toMinutes_(config.hora_cierre || '19:00');
+  String(config.dias_laborales || '1,2,3,4,5,6').split(/[,;\s]+/).map(parseDia_).forEach(function (d) {
+    if (d !== null && !isNaN(a) && !isNaN(b) && b > a) out.push({ dia: d, inicio: hhmm_(a), fin: hhmm_(b) });
+  });
+  return out;
+}
+
+/** Fecha de la hoja (Date o texto "YYYY-MM-DD" / "DD/MM/YYYY") → "YYYY-MM-DD". */
+function ymd_(value) {
+  if (value && typeof value.getTime === 'function' && !isNaN(value.getTime())) return Utilities.formatDate(value, ZONA, 'yyyy-MM-dd');
+  const s = String(value).trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return null;
+}
+
+/** Bloqueos vigentes como rangos {inicio: Date, fin: Date}. Sin horas = día completo. */
+function getBloqueos_(ss, dias) {
+  const sheet = ss.getSheetByName('Bloqueos');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const n = sheet.getLastRow() - 1;
+  const fechas = sheet.getRange(2, 1, n, 1).getValues();
+  const horas = sheet.getRange(2, 2, n, 2).getDisplayValues();
+  const desde = Date.now() - 86400000;
+  const hasta = Date.now() + (dias + 1) * 86400000;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const fecha = ymd_(fechas[i][0]);
+    if (!fecha) continue;
+    const a = toMinutes_(horas[i][0]);
+    const b = toMinutes_(horas[i][1]);
+    const ini = isNaN(a) ? '00:00' : hhmm_(a);
+    const inicio = Utilities.parseDate(fecha + ' ' + ini, ZONA, 'yyyy-MM-dd HH:mm');
+    const fin = isNaN(b) || (!isNaN(a) && b <= a)
+      ? new Date(Utilities.parseDate(fecha + ' 00:00', ZONA, 'yyyy-MM-dd HH:mm').getTime() + 86400000)
+      : Utilities.parseDate(fecha + ' ' + hhmm_(b), ZONA, 'yyyy-MM-dd HH:mm');
+    if (fin.getTime() < desde || inicio.getTime() > hasta) continue;
+    out.push({ inicio: inicio, fin: fin });
+  }
+  return out;
+}
+
+/** Ejecútala desde el editor: muestra lo que la landing va a recibir. */
+function diagnostico() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const config = getConfig_(ss);
+  const crudos = getSheetData_(ss, 'Servicios');
+  const servicios = getServicios_(ss);
+  console.log('Servicios: ' + servicios.length + ' de ' + crudos.length + ' filas (sin Nombre se ignoran)');
+  servicios.forEach(function (s) {
+    console.log('  · ' + s.ID + ' | ' + s.Nombre + ' | ' + s.Precio + ' € | ' + s.Duracion_Min + ' min | ' + (s.Tipo || 'Servicios'));
+  });
+  const promos = getPromociones_(ss, servicios);
+  console.log('Promociones válidas: ' + promos.length + ' de ' + getSheetData_(ss, 'Promociones').length +
+    ' (se ignoran las que no encuentran sus servicios)');
+  console.log('Horario:');
+  getHorarios_(ss, config).forEach(function (t) { console.log('  · ' + DIAS_SEMANA[t.dia] + ' ' + t.inicio + '–' + t.fin); });
+  console.log('Bloqueos próximos: ' + getBloqueos_(ss, 60).length);
+  ['pm_banco', 'pm_telefono', 'pm_cedula'].forEach(function (k) {
+    if (!config[k]) console.warn('Falta "' + k + '" en Configuracion (datos de Pago Móvil).');
+  });
 }
 
 /** Cupón válido (sin distinguir mayúsculas) o null. Usos_Restantes vacío = ilimitado. */

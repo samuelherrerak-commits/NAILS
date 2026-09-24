@@ -3,7 +3,7 @@ import { summarize } from './pricing'
 import { buildWhatsAppMessage, buildWhatsAppUrl } from './whatsapp'
 
 const catalog = {
-  servicios: [{ id: 'S1', nombre: 'Manicure', precio: 12, duracionMin: 60, tipo: 'base' as const }],
+  servicios: [{ id: 'S1', nombre: 'Manicure', precio: 12, duracionMin: 60, tipo: 'base' as const, categoria: 'Servicios' }],
   promociones: [],
   tasa: { valor: 400, fecha: null, fuente: 'BCV' },
 }
