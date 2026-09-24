@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #fdfbf7;
+  --color-surface: #ffffff;
+  --color-sand: #f4eee4;
+  --color-line: #ede6dc;
+  --color-rose: #e5b8c1;
+  --color-rose-soft: #f6e6e9;
+  --color-rose-deep: #b97a88;
+  --color-ink: #2d2a26;
+  --color-muted: #8a837a;
+  --color-danger: #b4533f;
+  --color-ok: #5e8a6a;
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
+
+  --shadow-card: 0 1px 2px rgb(45 42 38 / 0.04), 0 4px 16px -6px rgb(45 42 38 / 0.08);
+  --shadow-float: 0 8px 32px -8px rgb(45 42 38 / 0.28);
+  --shadow-sheet: 0 -8px 40px -12px rgb(45 42 38 / 0.25);
+
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input {
+    font-size: 16px; /* evita el zoom automático de iOS */
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-rose-deep);
+    outline-offset: 2px;
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
