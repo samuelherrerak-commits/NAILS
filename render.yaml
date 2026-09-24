@@ -7,7 +7,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        sync: false
+        value: https://script.google.com/macros/s/AKfycbx70XC3Lb0fhRVf_MMRN0598U-iuyCCGy_jrkeBvwhqXrjD7-qhjBUHBHVEyiNWsAWxeQ/exec
       - key: VITE_API_TOKEN
         value: MARIANAILS
       - key: VITE_WHATSAPP

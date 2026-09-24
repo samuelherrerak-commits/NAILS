@@ -88,7 +88,7 @@ El monto en Bs se calcula en el servidor y se guarda en `Total_Bs` junto con la 
 
 ## Publicar en Render
 
-**Opción A: Blueprint.** En Render, entra en **New → Blueprint**, elige este repositorio y Render leerá `render.yaml`. Te pedirá `VITE_API_URL`: pega la URL `/exec` del Apps Script.
+**Opción A: Blueprint.** En Render, entra en **New → Blueprint**, elige este repositorio y Render leerá `render.yaml`, que ya trae la URL `/exec` del Apps Script en `VITE_API_URL`. Si vuelves a crear la implementación y la URL cambia, actualízala en `render.yaml` o en el panel de Render.
 
 **Opción B: manual.** Entra en **New → Static Site** con esta configuración:
 
