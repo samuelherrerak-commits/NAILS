@@ -338,7 +338,10 @@ function doPost(e) {
       Metodo_Pago: metodoPago,
       Referencia: 'N/A',
       Cupon: orden.cupon ? orden.cupon.codigo : 'N/A',
-      Estado: esPagoMovil ? 'Pago por verificar' : 'Confirmada',
+      // Toda reserva queda Confirmada y en el calendario desde el primer momento
+      // (el evento ya se creó arriba). Cancelar es lo único que corre el script:
+      // cambiar el Estado a "Cancelada" libera el cupo (ver onEditInstalable).
+      Estado: 'Confirmada',
       Tasa_BCV: tasa ? tasa.valor : '',
       Total_Bs: totalBs === null ? '' : totalBs,
       Modalidad: modalidad === 'domicilio' ? 'A domicilio' : 'En el spa',

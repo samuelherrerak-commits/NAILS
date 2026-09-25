@@ -46,7 +46,7 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 | `Horarios` | `Dia, Hora_Inicio, Hora_Fin` | Tu horario semanal. Una fila por tramo; puedes repetir el día para una pausa (Lunes 09:00–12:00 y Lunes 14:00–18:00). Deja las horas vacías para cerrar ese día. |
 | `Bloqueos` | `Fecha, Hora_Inicio, Hora_Fin, Motivo` | Cierra fechas u horas puntuales (vacaciones, citas por fuera). Sin horas, bloquea el día completo. El motivo no se muestra a las clientas. |
 | `Cupones` | `Codigo, Descuento_Porcentaje, Descuento_Monto, Usos_Restantes` | Se usa el porcentaje si es mayor que 0; si no, el monto en €. Si `Usos_Restantes` está vacío, el cupón es ilimitado. |
-| `Reservaciones` | `ID, Fecha_Solicitud, Cliente, Telefono, Servicios, Total, Fecha_Cita, Hora_Cita, Metodo_Pago, Referencia, Cupon, Estado, Tasa_BCV, Total_Bs, Modalidad, Direccion, Recargo, Comprobante` | La llena el script. Las reservas con Pago Móvil entran con estado `Pago por verificar` y con el enlace al capture en Drive. `Referencia` ya no se usa (queda "N/A"). |
+| `Reservaciones` | `ID, Fecha_Solicitud, Cliente, Telefono, Servicios, Total, Fecha_Cita, Hora_Cita, Metodo_Pago, Referencia, Cupon, Estado, Tasa_BCV, Total_Bs, Modalidad, Direccion, Recargo, Comprobante, Evento_ID` | La llena el script. Toda reserva entra como `Confirmada` y **ya está en el calendario en ese mismo momento** (con el enlace al capture de Pago Móvil en Drive, si aplica) — no espera ninguna verificación manual. El único cambio que hace falta hacer a mano es pasar el Estado a `Cancelada` para liberar el horario. `Referencia` ya no se usa (queda "N/A"). |
 | `Configuracion` | `Clave, Valor` | Ver la tabla siguiente. |
 
 ### Claves de `Configuracion`
