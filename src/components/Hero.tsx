@@ -41,7 +41,7 @@ export function Hero({ config }: { config: BusinessConfig | null }) {
       <div aria-hidden className="pointer-events-none absolute -left-20 top-24 size-56 rounded-full bg-sand blur-3xl" />
 
       <div className="relative flex items-center justify-between">
-        <span className="font-display text-xl tracking-tight">
+        <span className="font-display text-[30px] tracking-tight">
           <span className="text-muted">By</span>Maria<span className="italic text-rose-deep">Nails</span>
         </span>
         {DEMO_MODE && (

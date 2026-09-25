@@ -70,6 +70,17 @@ Si no defines `VITE_API_URL`, la app corre en **modo demo**: usa datos de ejempl
 
 **Bloquear días u horas:** agrega una fila en la pestaña **Bloqueos**, o crea un evento en el calendario "Citas Mariana" (un evento de todo el día bloquea el día completo).
 
+### Cancelar una reserva (y liberar su horario)
+
+La disponibilidad que ve la clienta sale del **calendario**, no de la hoja. Por eso, **borrar una fila de `Reservaciones` no libera el horario** — el evento del calendario sigue ahí. Para cancelar de verdad:
+
+1. La primera vez, abre el menú **ByMariaNails → 🔔 Activar cancelaciones automáticas** (arriba, junto a Archivo/Editar/Ver). Te pedirá autorizar — es normal, solo pasa una vez.
+2. Para cancelar una reserva, en la hoja `Reservaciones` cambia su columna **Estado** a **"Cancelada"** (hay un menú desplegable). El horario se libera solo en la página, sin que hagas nada más.
+
+Si ya borraste filas de prueba sin cancelarlas primero (sus horarios siguen bloqueados), usa **ByMariaNails → 🧹 Liberar cupos de reservas canceladas/eliminadas**: revisa el calendario y libera los que ya no tengan una reserva activa. Solo toca eventos creados por este sistema — nunca borra algo que hayas puesto tú a mano en el calendario.
+
+El menú **ByMariaNails** también tiene accesos directos a "🔧 Configurar hojas" (`setupDatabase`), "🔍 Diagnóstico" y "💱 Probar tasa BCV", para no tener que entrar al editor de Apps Script.
+
 **Después de cambiar el código del script** entra en **Implementar → Gestionar implementaciones → ✏️ → Versión: Nueva versión → Implementar**. Si en cambio creas una implementación nueva, la URL cambia y hay que actualizarla en `render.yaml`. Los cambios en la hoja (servicios, horarios, bloqueos) se ven al instante, sin volver a implementar.
 
 ### Tasa BCV del euro

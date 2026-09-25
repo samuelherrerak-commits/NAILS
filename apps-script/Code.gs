@@ -11,11 +11,20 @@
  *      En "Bloqueos" cierras fechas u horas puntuales (vacaciones, citas por fuera).
  *      Ejecuta `diagnostico` para ver qué está leyendo el sistema.
  *   5. Ejecuta `probarTasa` para comprobar que la tasa BCV del euro se obtiene bien.
- *   6. Implementar > Nueva implementación > Aplicación web
+ *   6. Recarga la hoja (F5): aparece el menú "ByMariaNails". Ahí, ejecuta
+ *      "🔔 Activar cancelaciones automáticas" una vez (pide autorizar). Desde
+ *      entonces, cambiar el Estado de una reserva a "Cancelada" libera su cupo
+ *      en la página automáticamente.
+ *   7. Implementar > Nueva implementación > Aplicación web
  *      Ejecutar como: Yo · Quién tiene acceso: Cualquier persona.
  *      Copia la URL (termina en /exec) y úsala como VITE_API_URL en Render.
  *   Cada vez que cambies este código: Implementar > Gestionar implementaciones >
  *   editar > Nueva versión (la URL se mantiene).
+ *
+ * Cancelar una reserva: cambia su Estado a "Cancelada" en la hoja (hay un
+ * menú desplegable). El cupo se libera solo. Para limpiar de una vez cupos
+ * de reservas que ya borraste sin cancelar, usa el menú
+ * "ByMariaNails > 🧹 Liberar cupos de reservas canceladas/eliminadas".
  */
 
 const TOKEN = 'MARIANAILS';
@@ -32,7 +41,7 @@ const SHEETS = [
     name: 'Reservaciones',
     headers: ['ID', 'Fecha_Solicitud', 'Cliente', 'Telefono', 'Servicios', 'Total', 'Fecha_Cita', 'Hora_Cita',
       'Metodo_Pago', 'Referencia', 'Cupon', 'Estado', 'Tasa_BCV', 'Total_Bs',
-      'Modalidad', 'Direccion', 'Recargo', 'Comprobante'],
+      'Modalidad', 'Direccion', 'Recargo', 'Comprobante', 'Evento_ID'],
   },
   { name: 'Servicios', headers: ['ID', 'Nombre', 'Precio', 'Duracion_Min', 'Tipo'] },
   { name: 'Promociones', headers: ['ID', 'Nombre', 'Servicios_Incluidos', 'Precio_Promo'] },
@@ -43,6 +52,8 @@ const SHEETS = [
 ];
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const ESTADOS = ['Confirmada', 'Pago por verificar', 'Cancelada', 'Completada'];
+const ESTADO_CANCELADA = 'Cancelada';
 
 // Claves que lee la landing. Los valores vacíos se completan en la hoja.
 const CONFIG_DEFAULTS = [
@@ -113,6 +124,15 @@ function setupDatabase() {
     horarios.getRange(2, 1, rows.length, 3).setValues(rows);
   }
   ss.getSheetByName('Bloqueos').getRange('B:C').setNumberFormat('@');
+
+  // Menú desplegable en Estado: cambiar una reserva a "Cancelada" libera su cupo (ver onEditInstalable).
+  const reservaciones = ss.getSheetByName('Reservaciones');
+  const headersReservaciones = reservaciones.getRange(1, 1, 1, reservaciones.getLastColumn()).getValues()[0];
+  const colEstado = headersReservaciones.indexOf('Estado') + 1;
+  if (colEstado > 0) {
+    const regla = SpreadsheetApp.newDataValidation().requireValueInList(ESTADOS, true).setAllowInvalid(true).build();
+    reservaciones.getRange(2, colEstado, 1000, 1).setDataValidation(regla);
+  }
 
   getCalendar_();
 
@@ -286,6 +306,25 @@ function doPost(e) {
       ? direccion
       : (config.direccion_spa ? config.direccion_spa + ' · ' : '') + (config.direccion_spa_url || '');
 
+    // --- Crear el evento en el calendario primero: su ID se guarda en la hoja ---
+    // para poder borrarlo (y liberar el cupo) si la reserva se cancela desde ahí.
+    const titulo = (modalidad === 'domicilio' ? '🏠 Domicilio · ' : '') + 'Cita: ' + cliente + ' - ' + serviciosTexto;
+    const evento = calendar.createEvent(titulo, inicio, fin, {
+      location: ubicacion,
+      description: [
+        'Teléfono: ' + telefono,
+        modalidad === 'domicilio'
+          ? 'A domicilio: ' + direccion + ' (incluye ' + config_min_extra_(config) + ' min de traslado)'
+          : 'En el spa',
+        'Total: ' + orden.total.toFixed(2) + ' €' + (totalBs !== null ? ' (Bs. ' + totalBs.toFixed(2) + ')' : '') +
+          (orden.recargo > 0 ? ' · recargo domicilio ' + orden.recargo.toFixed(2) + ' €' : ''),
+        'Pago: ' + metodoPago,
+        'Capture: ' + (comprobanteUrl || 'N/A'),
+        'Cupón: ' + (orden.cupon ? orden.cupon.codigo : 'N/A'),
+        'ID: ' + id,
+      ].join('\n'),
+    });
+
     // --- Guardar en la hoja (por nombre de columna) ---
     appendByHeaders_(ss.getSheetByName('Reservaciones'), {
       ID: id,
@@ -306,26 +345,10 @@ function doPost(e) {
       Direccion: modalidad === 'domicilio' ? direccion : 'Spa',
       Recargo: orden.recargo,
       Comprobante: comprobanteUrl || 'N/A',
+      Evento_ID: evento.getId(),
     });
 
     if (orden.cupon) descontarCupon_(ss, orden.cupon);
-
-    const titulo = (modalidad === 'domicilio' ? '🏠 Domicilio · ' : '') + 'Cita: ' + cliente + ' - ' + serviciosTexto;
-    calendar.createEvent(titulo, inicio, fin, {
-      location: ubicacion,
-      description: [
-        'Teléfono: ' + telefono,
-        modalidad === 'domicilio'
-          ? 'A domicilio: ' + direccion + ' (incluye ' + config_min_extra_(config) + ' min de traslado)'
-          : 'En el spa',
-        'Total: ' + orden.total.toFixed(2) + ' €' + (totalBs !== null ? ' (Bs. ' + totalBs.toFixed(2) + ')' : '') +
-          (orden.recargo > 0 ? ' · recargo domicilio ' + orden.recargo.toFixed(2) + ' €' : ''),
-        'Pago: ' + metodoPago,
-        'Capture: ' + (comprobanteUrl || 'N/A'),
-        'Cupón: ' + (orden.cupon ? orden.cupon.codigo : 'N/A'),
-        'ID: ' + id,
-      ].join('\n'),
-    });
 
     return json_({
       success: true,
@@ -466,6 +489,163 @@ function getOcupacionCalendario_(dias) {
   return getCalendar_().getEvents(desde, hasta).map(function (ev) {
     return { inicio: ev.getStartTime().toISOString(), fin: ev.getEndTime().toISOString() };
   });
+}
+
+// ============================================================================
+// Cancelaciones: cambiar Estado a "Cancelada" en la hoja libera el cupo
+// ============================================================================
+
+/**
+ * Menú propio de la hoja. Disparador simple (no necesita CalendarApp), se
+ * instala solo al abrir la hoja.
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('ByMariaNails')
+    .addItem('🔧 Configurar hojas', 'setupDatabase')
+    .addSeparator()
+    .addItem('🔔 Activar cancelaciones automáticas', 'instalarDisparadores')
+    .addItem('🧹 Liberar cupos de reservas canceladas/eliminadas', 'liberarEventosHuerfanos')
+    .addSeparator()
+    .addItem('🔍 Diagnóstico', 'diagnostico')
+    .addItem('💱 Probar tasa BCV', 'probarTasa')
+    .addToUi();
+}
+
+/**
+ * Ejecútala una vez (menú ByMariaNails > Activar cancelaciones automáticas).
+ * Instala el disparador que borra el evento del calendario cuando cambias
+ * el Estado de una reserva a "Cancelada". Los disparadores simples (onEdit
+ * normal) no pueden usar CalendarApp, por eso hace falta instalarlo así;
+ * la primera vez pedirá autorización.
+ */
+function instalarDisparadores() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'onEditInstalable') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('onEditInstalable').forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onEdit().create();
+  SpreadsheetApp.getUi().alert(
+    'Listo ✅ Ahora, si cambias el Estado de una reserva a "Cancelada" en la hoja, ' +
+    'ese horario se libera automáticamente en la página.',
+  );
+}
+
+/** Disparador instalable: se activa con cualquier edición de la hoja. */
+function onEditInstalable(e) {
+  try {
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== 'Reservaciones') return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const colEstado = headers.indexOf('Estado') + 1;
+    if (colEstado === 0) return;
+
+    const primeraCol = e.range.getColumn();
+    const ultimaCol = primeraCol + e.range.getNumColumns() - 1;
+    if (colEstado < primeraCol || colEstado > ultimaCol) return; // la edición no tocó Estado
+
+    const primeraFila = Math.max(2, e.range.getRow());
+    const ultimaFila = e.range.getRow() + e.range.getNumRows() - 1;
+    for (let fila = primeraFila; fila <= ultimaFila; fila++) {
+      const estado = sheet.getRange(fila, colEstado).getDisplayValue().trim();
+      if (estado === ESTADO_CANCELADA) cancelarReservaFila_(sheet, fila, headers);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/** Borra el evento del calendario de esa fila (si lo encuentra) y limpia Evento_ID. */
+function cancelarReservaFila_(sheet, fila, headers) {
+  const col = function (nombre) {
+    const i = headers.indexOf(nombre);
+    return i === -1 ? null : i + 1;
+  };
+  const colEventoId = col('Evento_ID');
+  const colId = col('ID');
+  const colFecha = col('Fecha_Cita');
+  const colHora = col('Hora_Cita');
+
+  const eventoId = colEventoId ? String(sheet.getRange(fila, colEventoId).getValue() || '').trim() : '';
+  let liberado = eventoId ? eliminarEventoPorId_(eventoId) : false;
+
+  // Respaldo para reservas creadas antes de guardar Evento_ID: busca por fecha/hora y el ID en la descripción.
+  if (!liberado && colId && colFecha && colHora) {
+    const id = String(sheet.getRange(fila, colId).getValue() || '').trim();
+    const fecha = sheet.getRange(fila, colFecha).getDisplayValue();
+    const hora = sheet.getRange(fila, colHora).getDisplayValue();
+    if (id && fecha && hora) liberado = eliminarEventoPorFechaEId_(fecha, hora, id);
+  }
+
+  if (liberado && colEventoId) sheet.getRange(fila, colEventoId).clearContent();
+}
+
+function eliminarEventoPorId_(eventoId) {
+  try {
+    const ev = CalendarApp.getEventById(eventoId);
+    if (!ev) return false;
+    ev.deleteEvent();
+    return true;
+  } catch (err) {
+    console.warn('No se pudo eliminar el evento ' + eventoId + ': ' + err);
+    return false;
+  }
+}
+
+function eliminarEventoPorFechaEId_(fecha, hora, id) {
+  try {
+    const inicio = Utilities.parseDate(fecha + ' ' + hora, ZONA, 'yyyy-MM-dd HH:mm');
+    const fin = new Date(inicio.getTime() + 6 * 3600000); // margen amplio para hallar el evento completo
+    const eventos = getCalendar_().getEvents(new Date(inicio.getTime() - 3600000), fin);
+    for (let i = 0; i < eventos.length; i++) {
+      if ((eventos[i].getDescription() || '').indexOf('ID: ' + id) !== -1) {
+        eventos[i].deleteEvent();
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn(err);
+  }
+  return false;
+}
+
+/**
+ * Menú ByMariaNails > Liberar cupos de reservas canceladas/eliminadas.
+ * Limpia de una vez los eventos de prueba: recorre el calendario y borra
+ * los eventos creados por este sistema (los que tienen "ID: …" en su
+ * descripción) que ya no correspondan a una fila activa de Reservaciones
+ * — porque la fila se borró o su Estado es "Cancelada". Nunca toca un
+ * evento que no tenga esa marca (por ejemplo, uno puesto a mano).
+ */
+function liberarEventosHuerfanos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const idsActivos = {};
+  const sheet = ss.getSheetByName('Reservaciones');
+  if (sheet && sheet.getLastRow() > 1) {
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const colId = headers.indexOf('ID') + 1;
+    const colEstado = headers.indexOf('Estado') + 1;
+    if (colId > 0) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues().forEach(function (row) {
+        const estado = colEstado > 0 ? String(row[colEstado - 1] || '').trim() : '';
+        if (estado !== ESTADO_CANCELADA) idsActivos[String(row[colId - 1] || '').trim()] = true;
+      });
+    }
+  }
+
+  const desde = new Date(Date.now() - 86400000);
+  const hasta = new Date(Date.now() + 90 * 86400000);
+  let liberados = 0;
+  getCalendar_().getEvents(desde, hasta).forEach(function (ev) {
+    const m = /ID: ([0-9a-fA-F-]{8,})/.exec(ev.getDescription() || '');
+    if (!m) return; // no lo creó este sistema: no se toca
+    if (!idsActivos[m[1]]) {
+      ev.deleteEvent();
+      liberados++;
+    }
+  });
+
+  const mensaje = liberados === 1 ? 'Se liberó 1 cupo.' : 'Se liberaron ' + liberados + ' cupos.';
+  SpreadsheetApp.getUi().alert(mensaje);
 }
 
 /** Misma lógica de precios que src/lib/pricing.ts. */
